@@ -36,14 +36,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
 // Auth helpers
 // ---------------------------------------------------------------------------
 
-/** Send OTP to an Indian phone number (+91XXXXXXXXXX) */
-export async function sendOTP(phone: string) {
-  return supabase.auth.signInWithOtp({ phone })
-}
-
-/** Verify the 6-digit OTP the user received via SMS */
-export async function verifyOTP(phone: string, token: string) {
-  return supabase.auth.verifyOtp({ phone, token, type: 'sms' })
+/**
+ * Sign in with Google OAuth popup.
+ * Used for development + beta. Switch to phone OTP before public India launch.
+ * Requires: Supabase Google provider enabled with Client ID + Secret.
+ */
+export async function signInWithGoogle() {
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: 'surge://auth/callback',  // deep link back into app after Google auth
+    },
+  })
 }
 
 /** Sign out and clear session */
@@ -51,7 +55,17 @@ export async function signOut() {
   return supabase.auth.signOut()
 }
 
-/** Get current session synchronously from cache */
+/** Get current session from cache */
 export async function getSession() {
   return supabase.auth.getSession()
 }
+
+// ---------------------------------------------------------------------------
+// TODO before public India launch: replace signInWithGoogle with phone OTP
+// ---------------------------------------------------------------------------
+// export async function sendOTP(phone: string) {
+//   return supabase.auth.signInWithOtp({ phone })
+// }
+// export async function verifyOTP(phone: string, token: string) {
+//   return supabase.auth.verifyOtp({ phone, token, type: 'sms' })
+// }
