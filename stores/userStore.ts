@@ -26,7 +26,7 @@ export interface UserProfile {
   tier:                 Tier
   accountability_name?: string
   accountability_phone?:string
-  accountability_freq?: 'daily' | 'weekly' | 'after_each'
+  accountability_freq?: 'daily' | 'weekly'
 }
 
 interface UserState {

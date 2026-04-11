@@ -1,71 +1,118 @@
 import 'react-native-url-polyfill/auto'
 import { createClient } from '@supabase/supabase-js'
-import * as SecureStore from 'expo-secure-store'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as WebBrowser from 'expo-web-browser'
+import * as Linking from 'expo-linking'
+
+// Required for OAuth flow on mobile
+WebBrowser.maybeCompleteAuthSession()
 
 // ---------------------------------------------------------------------------
-// Secure storage adapter for Supabase auth tokens
+// AsyncStorage adapter for Supabase auth tokens
 // ---------------------------------------------------------------------------
-const ExpoSecureStoreAdapter = {
-  getItem:    (key: string) => SecureStore.getItemAsync(key),
-  setItem:    (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+const AsyncStorageAdapter = {
+  getItem:    (key: string) => AsyncStorage.getItem(key),
+  setItem:    (key: string, value: string) => AsyncStorage.setItem(key, value),
+  removeItem: (key: string) => AsyncStorage.removeItem(key),
 }
 
 // ---------------------------------------------------------------------------
 // Environment variables
-// Set these in .env and access via app.config.ts extra field
-// NEVER hardcode keys here
 // ---------------------------------------------------------------------------
 const SUPABASE_URL  = process.env.EXPO_PUBLIC_SUPABASE_URL  ?? ''
 const SUPABASE_ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
 if (!SUPABASE_URL || !SUPABASE_ANON) {
-  console.warn('[Surge] Supabase env vars missing. Copy .env.example to .env and fill in values.')
+  console.warn('[Surge] Supabase env vars missing.')
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {
-    storage:          ExpoSecureStoreAdapter,
-    autoRefreshToken: true,
-    persistSession:   true,
+    storage:            AsyncStorageAdapter,
+    autoRefreshToken:   true,
+    persistSession:     true,
     detectSessionInUrl: false,
   },
 })
 
 // ---------------------------------------------------------------------------
-// Auth helpers
+// Google OAuth — opens in-app browser, handles redirect back automatically
 // ---------------------------------------------------------------------------
-
-/**
- * Sign in with Google OAuth popup.
- * Used for development + beta. Switch to phone OTP before public India launch.
- * Requires: Supabase Google provider enabled with Client ID + Secret.
- */
 export async function signInWithGoogle() {
-  return supabase.auth.signInWithOAuth({
+  const redirectTo = Linking.createURL('auth/callback')
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: {
-      redirectTo: 'surge://auth/callback',  // deep link back into app after Google auth
-    },
+    options:  { redirectTo, skipBrowserRedirect: true },
+  })
+
+  if (error || !data?.url) return { error: error ?? new Error('No OAuth URL') }
+
+  const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+
+  if (result.type === 'success') {
+    const { url } = result
+    const params  = new URL(url)
+    const accessToken  = params.searchParams.get('access_token')
+    const refreshToken = params.searchParams.get('refresh_token')
+
+    if (accessToken && refreshToken) {
+      await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+    } else {
+      // Try parsing from hash fragment
+      const hash = url.split('#')[1] ?? ''
+      const hashParams = new URLSearchParams(hash)
+      const at = hashParams.get('access_token')
+      const rt = hashParams.get('refresh_token')
+      if (at && rt) {
+        await supabase.auth.setSession({ access_token: at, refresh_token: rt })
+      }
+    }
+  }
+
+  return { error: null }
+}
+
+// ---------------------------------------------------------------------------
+// Phone OTP auth
+// ---------------------------------------------------------------------------
+export async function sendOTP(phone: string) {
+  return supabase.auth.signInWithOtp({ phone })
+}
+
+export async function verifyOTP(phone: string, token: string) {
+  return supabase.auth.verifyOtp({ phone, token, type: 'sms' })
+}
+
+// ---------------------------------------------------------------------------
+// AI feedback
+// ---------------------------------------------------------------------------
+export async function submitAIFeedback(feedback: {
+  type:          'voice_workout' | 'voice_food' | 'image_food'
+  reason:        string
+  transcript?:   string
+  parsed_output?: any
+  user_saved:    boolean
+}) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  return supabase.from('ai_feedback').insert({
+    user_id:       user.id,
+    type:          feedback.type,
+    reason:        feedback.reason,
+    transcript:    feedback.transcript ?? null,
+    parsed_output: feedback.parsed_output ?? null,
+    user_saved:    feedback.user_saved,
   })
 }
 
-/** Sign out and clear session */
+// ---------------------------------------------------------------------------
+// Sign out
+// ---------------------------------------------------------------------------
 export async function signOut() {
   return supabase.auth.signOut()
 }
 
-/** Get current session from cache */
 export async function getSession() {
   return supabase.auth.getSession()
 }
-
-// ---------------------------------------------------------------------------
-// TODO before public India launch: replace signInWithGoogle with phone OTP
-// ---------------------------------------------------------------------------
-// export async function sendOTP(phone: string) {
-//   return supabase.auth.signInWithOtp({ phone })
-// }
-// export async function verifyOTP(phone: string, token: string) {
-//   return supabase.auth.verifyOtp({ phone, token, type: 'sms' })
-// }
