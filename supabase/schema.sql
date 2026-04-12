@@ -12,7 +12,8 @@ create extension if not exists "pgcrypto";
 -- =============================================================================
 create table if not exists public.users (
   id                    uuid primary key references auth.users(id) on delete cascade,
-  phone                 text unique not null,
+  phone                 text unique,
+  email                 text,
   name                  text,
   age                   int,
   sex                   text check (sex in ('male','female','other')),

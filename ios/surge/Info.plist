@@ -66,6 +66,14 @@
       <string>UIInterfaceOrientationLandscapeLeft</string>
       <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <key>NSCameraUsageDescription</key>
+    <string>Surge uses your camera to log food by photo.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Surge uses your microphone to log workouts and food by voice.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Surge saves your share cards to your photo library.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Surge saves your share cards to your photo library.</string>
     <key>UIUserInterfaceStyle</key>
     <string>Light</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>

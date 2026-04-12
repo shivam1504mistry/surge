@@ -8,6 +8,7 @@
  * Falls back to stub data if edge function is not deployed (DEV_USE_STUBS = true).
  */
 import React, { useEffect, useRef, useState } from 'react'
+import { Audio } from 'expo-av'
 import {
   Modal,
   View,
@@ -227,7 +228,11 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
       return
     }
     track('voice_log_started')
-    startListening()
+    Audio.requestPermissionsAsync().then(({ granted }) => {
+      if (granted) startListening()
+      // If not granted, useVoiceLog.startRecording will surface the error
+      else startListening() // still enter listening UI; error shown when Done is tapped
+    })
   }, [visible])
 
   async function handleDoneTalking() {

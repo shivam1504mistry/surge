@@ -8,7 +8,7 @@
  *   4. Show editable results list with AI estimate label
  *   5. onSave(foods) → caller saves to DB
  */
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import {
   View,
   Text,
@@ -43,6 +43,13 @@ type Screen = 'upsell' | 'camera' | 'analysing' | 'results' | 'error'
 export default function ImageFoodModal({ visible, isPro, onClose, onSave }: Props) {
   const [permission, requestPermission] = useCameraPermissions()
   const [screen,            setScreen]           = useState<Screen>(isPro ? 'camera' : 'upsell')
+
+  // Request camera permission as soon as the modal opens
+  useEffect(() => {
+    if (visible && isPro && !permission?.granted) {
+      requestPermission()
+    }
+  }, [visible])
   const [foods,             setFoods]            = useState<ParsedFood[]>([])
   const [errorMsg,          setErrorMsg]         = useState('')
   const [feedbackOpen,      setFeedbackOpen]     = useState(false)

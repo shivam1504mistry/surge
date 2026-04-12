@@ -10,7 +10,8 @@ export type Tier     = 'free' | 'pro'
 
 export interface UserProfile {
   id:                   string
-  phone:                string
+  phone:                string | null
+  email:                string | null
   name:                 string
   age:                  number
   sex:                  Sex

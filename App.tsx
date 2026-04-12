@@ -3,13 +3,55 @@ import { StatusBar } from "expo-status-bar";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Text, View } from "react-native";
+import { Text, View, ScrollView, TouchableOpacity } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-react-native";
 import { posthog, track, identify } from "./lib/analytics";
 
+// ---------------------------------------------------------------------------
+// Error boundary — shows crash details on screen instead of blank crash
+// ---------------------------------------------------------------------------
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: any) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <ScrollView style={{ flex: 1, backgroundColor: '#0D0D0D', padding: 20, paddingTop: 60 }}>
+          <Text style={{ color: '#FF4D00', fontSize: 18, fontWeight: 'bold', marginBottom: 12 }}>
+            Crash — tap to copy error
+          </Text>
+          <Text style={{ color: '#fff', fontSize: 13, lineHeight: 20 }}>
+            {this.state.error.toString()}
+          </Text>
+          <Text style={{ color: '#888', fontSize: 11, marginTop: 16, lineHeight: 18 }}>
+            {this.state.error.stack}
+          </Text>
+          <TouchableOpacity
+            style={{ marginTop: 24, backgroundColor: '#FF4D00', padding: 14, borderRadius: 8 }}
+            onPress={() => this.setState({ error: null })}
+          >
+            <Text style={{ color: '#fff', textAlign: 'center', fontWeight: 'bold' }}>Retry</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      )
+    }
+    return this.props.children
+  }
+}
+
 import { supabase } from "./lib/supabase";
 import { useUserStore } from "./stores/userStore";
+import { Linking } from "react-native";
 import { Colors } from "./constants/theme";
 
 // Onboarding screens (Agent 1 builds these)
@@ -65,34 +107,57 @@ function TabIcon({
 // Main tabs
 // ---------------------------------------------------------------------------
 function MainTabs() {
+  const insets = useSafeAreaInsets();
+  const TAB_CONTENT_HEIGHT = 58;
+  const tabBarHeight = TAB_CONTENT_HEIGHT + insets.bottom;
+
   return (
     <Tab.Navigator
+      initialRouteName="Today"
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
           backgroundColor: Colors.surface,
           borderTopColor: Colors.border,
-          height: 72,
-          paddingBottom: 8,
+          borderTopWidth: 1,
+          height: tabBarHeight,
+          paddingBottom: insets.bottom,
+          paddingTop: 0,
+          overflow: 'visible',
         },
         tabBarShowLabel: false,
       }}
     >
       <Tab.Screen
-        name="Today"
-        component={TodayScreen}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="⚡" label="Today" focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
         name="History"
         component={HistoryScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="📅" label="History" focused={focused} />
+            <TabIcon emoji="📋" label="Log" focused={focused} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Today"
+        component={TodayScreen}
+        options={{
+          tabBarIcon: () => (
+            <View style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: Colors.accent,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: -20,
+              shadowColor: Colors.accent,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.5,
+              shadowRadius: 12,
+              elevation: 8,
+            }}>
+              <Text style={{ fontSize: 24 }}>🎤</Text>
+            </View>
           ),
         }}
       />
@@ -101,7 +166,7 @@ function MainTabs() {
         component={ProfileScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="👤" label="Profile" focused={focused} />
+            <TabIcon emoji="👤" label="Me" focused={focused} />
           ),
         }}
       />
@@ -186,16 +251,22 @@ function RootNavigator() {
 // App root
 // ---------------------------------------------------------------------------
 export default function App() {
-  const { setSession, setLoading } = useUserStore();
+  const { setSession, setLoading, setProfile } = useUserStore();
+
+  async function loadProfile(userId: string) {
+    const { data } = await supabase.from('users').select('*').eq('id', userId).single()
+    if (data) setProfile(data)
+  }
 
   useEffect(() => {
     track('app_open')
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setLoading(false);
       if (session?.user) {
         identify(session.user.id, { email: session.user.email })
+        loadProfile(session.user.id)
       }
+      setLoading(false);
     });
     const {
       data: { subscription },
@@ -203,19 +274,22 @@ export default function App() {
       setSession(session);
       if (session?.user) {
         identify(session.user.id, { email: session.user.email })
+        loadProfile(session.user.id)
       }
     });
     return () => subscription.unsubscribe();
   }, []);
 
   return (
-    <PostHogProvider client={posthog}>
-      <QueryClientProvider client={queryClient}>
-        <NavigationContainer>
-          <StatusBar style="light" />
-          <RootNavigator />
-        </NavigationContainer>
-      </QueryClientProvider>
-    </PostHogProvider>
+    <ErrorBoundary>
+      <PostHogProvider client={posthog}>
+        <QueryClientProvider client={queryClient}>
+          <NavigationContainer>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </NavigationContainer>
+        </QueryClientProvider>
+      </PostHogProvider>
+    </ErrorBoundary>
   );
 }

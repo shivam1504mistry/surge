@@ -42,6 +42,7 @@ export default function AccountabilityScreen() {
   const route    = useRoute<RouteProp<RootParamList, 'Accountability'>>()
   const params   = route.params
   const setProfile = useUserStore((s) => s.setProfile)
+  const session    = useUserStore((s) => s.session)
 
   const [accName,  setAccName]  = useState('')
   const [accPhone, setAccPhone] = useState('')
@@ -67,12 +68,13 @@ export default function AccountabilityScreen() {
 
     setSaving(true)
     try {
-      const { data: { user } } = await supabase.auth.getUser()
+      const user = session?.user
       if (!user) throw new Error('Not authenticated')
 
       const profileData = {
         id:                   user.id,
-        phone:                user.phone ?? user.email ?? '',
+        phone:                user.phone ?? null,
+        email:                user.email ?? null,
         name:                 params.name,
         age:                  params.age,
         sex:                  params.sex,

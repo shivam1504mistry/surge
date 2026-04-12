@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Surge — Nav Options v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; font-family: -apple-system, sans-serif; color: #fff; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; font-weight: 800; color: #FF4D00; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #555; margin-bottom: 32px; }
+
+  .grid { display: flex; flex-wrap: wrap; gap: 32px; justify-content: center; }
+  .card { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .label { font-size: 11px; font-weight: 700; color: #FF4D00; letter-spacing: 1.2px; text-transform: uppercase; }
+  .desc { font-size: 11px; color: #555; text-align: center; max-width: 200px; line-height: 1.5; }
+
+  .phone {
+    width: 220px; height: 90px;
+    background: #1A1A1A;
+    border-radius: 0 0 24px 24px;
+    border: 1px solid #2a2a2a;
+    border-top: none;
+    overflow: visible;
+    position: relative;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  }
+
+  /* ── A: Icons only + dot ── */
+  .nav-a {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 68px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    border-radius: 0 0 24px 24px;
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding-bottom: 10px;
+  }
+  .nav-a .t { display: flex; flex-direction: column; align-items: center; gap: 5px; flex: 1; }
+  .nav-a .ico { font-size: 24px; }
+  .nav-a .dot { width: 4px; height: 4px; border-radius: 2px; background: transparent; }
+  .nav-a .t.on .dot { background: #FF4D00; }
+
+  /* ── B: Labels, pill bg ── */
+  .nav-b {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 68px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    border-radius: 0 0 24px 24px;
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 6px 8px 10px;
+  }
+  .nav-b .t { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; padding: 6px 4px; border-radius: 12px; }
+  .nav-b .t.on { background: rgba(255,77,0,0.12); }
+  .nav-b .ico { font-size: 22px; }
+  .nav-b .lbl { font-size: 10px; font-weight: 700; color: #444; }
+  .nav-b .t.on .lbl { color: #FF4D00; }
+
+  /* ── C: FAB mic center ── */
+  .nav-c {
+    display: flex; align-items: flex-end; justify-content: space-around;
+    height: 68px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    border-radius: 0 0 24px 24px;
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding-bottom: 10px;
+  }
+  .nav-c .t { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; padding-bottom: 2px; }
+  .nav-c .ico { font-size: 22px; }
+  .nav-c .lbl { font-size: 10px; font-weight: 600; color: #444; }
+  .nav-c .t.on .lbl { color: #FF4D00; }
+  .nav-c .fab-wrap { flex: 1; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 0; }
+  .nav-c .fab {
+    width: 52px; height: 52px; border-radius: 26px;
+    background: #FF4D00;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    box-shadow: 0 4px 16px rgba(255,77,0,0.5);
+    margin-bottom: 2px;
+  }
+
+  /* ── D: Top bar indicator, no labels ── */
+  .nav-d {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 68px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    border-radius: 0 0 24px 24px;
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding-bottom: 10px;
+  }
+  .nav-d .t { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; padding-top: 6px; }
+  .nav-d .bar { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 28px; height: 2px; border-radius: 1px; background: transparent; }
+  .nav-d .t.on .bar { background: #FF4D00; }
+  .nav-d .ico { font-size: 24px; }
+
+  /* ── E: Text tabs only, no icons ── */
+  .nav-e {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 52px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    border-radius: 0 0 24px 24px;
+    position: absolute; bottom: 0; left: 0; right: 0;
+  }
+  .nav-e .t { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; height: 100%; border-bottom: 2px solid transparent; }
+  .nav-e .t.on { border-bottom-color: #FF4D00; }
+  .nav-e .lbl { font-size: 13px; font-weight: 700; color: #555; letter-spacing: 0.3px; }
+  .nav-e .t.on .lbl { color: #fff; }
+
+  /* ── F: Icon + label, underline ── */
+  .nav-f {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 68px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    border-radius: 0 0 24px 24px;
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding-bottom: 10px;
+  }
+  .nav-f .t { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+  .nav-f .ico { font-size: 20px; }
+  .nav-f .lbl { font-size: 10px; font-weight: 700; color: #444; }
+  .nav-f .t.on .lbl { color: #FF4D00; }
+  .nav-f .line { width: 20px; height: 2px; border-radius: 1px; background: transparent; }
+  .nav-f .t.on .line { background: #FF4D00; }
+
+  .tag { display: inline-block; margin-top: 6px; font-size: 10px; padding: 3px 10px; border-radius: 20px; font-weight: 700; letter-spacing: 0.5px; }
+  .rec { background: rgba(0,210,106,0.15); color: #00D26A; }
+  .cur { background: rgba(255,77,0,0.12); color: #FF4D00; }
+</style>
+</head>
+<body>
+<h1>⚡ Surge — Nav Options v2</h1>
+<p class="subtitle">Pick one. All use short labels (Log / Me) to avoid truncation. Icons are larger + spaced from the line.</p>
+
+<div class="grid" style="margin-top: 24px;">
+
+  <!-- A -->
+  <div class="card">
+    <div class="label">A — Icons + dot</div>
+    <div class="phone" style="height:80px;">
+      <div class="nav-a">
+        <div class="t"><span class="ico">📋</span><div class="dot"></div></div>
+        <div class="t on"><span class="ico">🎤</span><div class="dot"></div></div>
+        <div class="t"><span class="ico">👤</span><div class="dot"></div></div>
+      </div>
+    </div>
+    <div class="desc">No labels. Orange dot = active. Cleanest. Works at any size.</div>
+    <span class="tag rec">Minimal</span>
+  </div>
+
+  <!-- B -->
+  <div class="card">
+    <div class="label">B — Pill highlight</div>
+    <div class="phone" style="height:80px;">
+      <div class="nav-b">
+        <div class="t"><span class="ico">📋</span><span class="lbl">Log</span></div>
+        <div class="t on"><span class="ico">🎤</span><span class="lbl">Today</span></div>
+        <div class="t"><span class="ico">👤</span><span class="lbl">Me</span></div>
+      </div>
+    </div>
+    <div class="desc">Labels + orange pill behind active tab. Fits all screen sizes.</div>
+    <span class="tag cur">Bold</span>
+  </div>
+
+  <!-- C -->
+  <div class="card">
+    <div class="label">C — FAB mic, no labels</div>
+    <div class="phone" style="height:90px; overflow: visible;">
+      <div class="nav-c">
+        <div class="t"><span class="ico">📋</span><span class="lbl">Log</span></div>
+        <div class="fab-wrap"><div class="fab">🎤</div></div>
+        <div class="t"><span class="ico">👤</span><span class="lbl">Me</span></div>
+      </div>
+    </div>
+    <div class="desc">Floating mic button rises above bar. Side tabs have label. Draws eye to Today.</div>
+    <span class="tag cur">Current direction</span>
+  </div>
+
+  <!-- D -->
+  <div class="card">
+    <div class="label">D — Top bar, no labels</div>
+    <div class="phone" style="height:80px;">
+      <div class="nav-d">
+        <div class="t"><div class="bar"></div><span class="ico">📋</span></div>
+        <div class="t on"><div class="bar"></div><span class="ico">🎤</span></div>
+        <div class="t"><div class="bar"></div><span class="ico">👤</span></div>
+      </div>
+    </div>
+    <div class="desc">Orange bar at top of active tab. Nike Training Club style. No labels.</div>
+    <span class="tag">Nike-style</span>
+  </div>
+
+  <!-- E -->
+  <div class="card">
+    <div class="label">E — Text only tabs</div>
+    <div class="phone" style="height:64px;">
+      <div class="nav-e">
+        <div class="t"><span class="lbl">Log</span></div>
+        <div class="t on"><span class="lbl">Today</span></div>
+        <div class="t"><span class="lbl">Me</span></div>
+      </div>
+    </div>
+    <div class="desc">No icons at all. Just text tabs with orange underline. Very minimal. Small footprint.</div>
+    <span class="tag rec">Smallest</span>
+  </div>
+
+  <!-- F -->
+  <div class="card">
+    <div class="label">F — Icon + label + line</div>
+    <div class="phone" style="height:80px;">
+      <div class="nav-f">
+        <div class="t"><span class="ico">📋</span><span class="lbl">Log</span><div class="line"></div></div>
+        <div class="t on"><span class="ico">🎤</span><span class="lbl">Today</span><div class="line"></div></div>
+        <div class="t"><span class="ico">👤</span><span class="lbl">Me</span><div class="line"></div></div>
+      </div>
+    </div>
+    <div class="desc">Icons + short labels + orange underline on active. Familiar, safe. No truncation.</div>
+    <span class="tag rec">Safe choice</span>
+  </div>
+
+</div>
+
+<div style="margin-top: 40px; padding: 16px; background:#1a1a1a; border-radius:12px; border:1px solid #2a2a2a; max-width: 500px; margin-left: auto; margin-right: auto;">
+  <div style="font-size:11px; font-weight:700; color:#FF4D00; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">Note on spacing fix</div>
+  <div style="font-size:12px; color:#888; line-height:1.6;">
+    All options above have <b style="color:#fff">paddingBottom: 10px</b> so icons clear the home indicator line. The current build was fixed to use <code style="color:#FF4D00">useSafeAreaInsets()</code> — height adapts to each device automatically.
+  </div>
+</div>
+
+</body>
+</html>

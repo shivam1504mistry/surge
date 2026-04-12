@@ -37,6 +37,7 @@ import {
   FontWeight,
   Radius,
   Spacing,
+  BOTTOM_SAFE_PADDING,
 } from '../../constants/theme'
 import { useWorkoutStore } from '../../stores/workoutStore'
 import { useUserStore } from '../../stores/userStore'
@@ -47,7 +48,6 @@ import FoodSearchModal, { FoodLogPayload } from '../../components/FoodSearchModa
 import ImageFoodModal from '../../components/ImageFoodModal'
 import { useNutritionStore } from '../../stores/nutritionStore'
 import { MealSlot } from '../../stores/nutritionStore'
-import SupportButton from '../../components/SupportButton'
 
 // ---------------------------------------------------------------------------
 // Exercise types + local fallback (used by manual log modal)
@@ -183,7 +183,6 @@ export default function TodayScreen() {
             <Text style={styles.headerDate}>⚡ Surge</Text>
           </View>
           <View style={styles.headerActions}>
-            <SupportButton />
             <TouchableOpacity style={styles.shareBtn} onPress={() => navigation.navigate('Share')}>
               <Text style={styles.shareBtnText}>Share 📤</Text>
             </TouchableOpacity>
@@ -325,11 +324,9 @@ export default function TodayScreen() {
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Text style={styles.pickerOptionLabel}>Log food by photo</Text>
-                  {!isPro && (
-                    <View style={styles.proBadge}>
-                      <Text style={styles.proBadgeText}>PRO</Text>
-                    </View>
-                  )}
+                  <View style={styles.testingBadge}>
+                    <Text style={styles.testingBadgeText}>TESTING</Text>
+                  </View>
                 </View>
                 <Text style={styles.pickerOptionSub}>AI estimates macros from image</Text>
               </View>
@@ -449,7 +446,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding:       Spacing.md,
-    paddingBottom: Spacing.xxl,
+    paddingBottom: BOTTOM_SAFE_PADDING,
     gap:           Spacing.lg,
   },
 
@@ -670,6 +667,18 @@ const styles = StyleSheet.create({
   proBadgeText: {
     fontSize:   9,
     color:      Colors.accent,
+    fontWeight: FontWeight.bold,
+    letterSpacing: 0.5,
+  },
+  testingBadge: {
+    backgroundColor: 'rgba(255,184,0,0.15)',
+    borderRadius:    Radius.full,
+    paddingHorizontal: 6,
+    paddingVertical:   2,
+  },
+  testingBadgeText: {
+    fontSize:   9,
+    color:      Colors.warning,
     fontWeight: FontWeight.bold,
     letterSpacing: 0.5,
   },

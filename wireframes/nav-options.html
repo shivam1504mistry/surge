@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Surge — Bottom Nav Options</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #111; font-family: -apple-system, sans-serif; color: #fff; padding: 24px 16px; }
+  h1 { font-size: 22px; font-weight: 800; color: #FF4D00; margin-bottom: 6px; }
+  .subtitle { font-size: 13px; color: #666; margin-bottom: 32px; }
+
+  .section { margin-bottom: 48px; }
+  .section-label { font-size: 11px; font-weight: 700; color: #FF4D00; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .section-desc { font-size: 12px; color: #555; margin-bottom: 16px; }
+
+  /* Phone frame */
+  .phone {
+    width: 320px; height: 120px;
+    background: #1A1A1A; border-radius: 0 0 32px 32px;
+    border: 1.5px solid #2a2a2a; border-top: none;
+    overflow: hidden; position: relative;
+    margin: 0 auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  }
+
+  /* ── Option 1: Current (broken) ── */
+  .nav-current {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 72px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    position: absolute; bottom: 0; left: 0; right: 0;
+  }
+  .nav-current .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+  .nav-current .tab .emoji { font-size: 22px; }
+  .nav-current .tab .lbl { font-size: 9px; font-weight: 600; color: #555; letter-spacing: 0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 52px; }
+  .nav-current .tab.active .lbl { color: #FF4D00; }
+
+  /* ── Option A: Icons only, no labels ── */
+  .nav-a {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 72px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    position: absolute; bottom: 0; left: 0; right: 0;
+  }
+  .nav-a .tab { display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .nav-a .tab .emoji { font-size: 26px; }
+  .nav-a .tab .dot { width: 4px; height: 4px; border-radius: 2px; background: transparent; margin-top: 4px; }
+  .nav-a .tab.active .dot { background: #FF4D00; }
+
+  /* ── Option B: Pill active state ── */
+  .nav-b {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 72px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    position: absolute; bottom: 0; left: 0; right: 0; padding: 0 8px;
+  }
+  .nav-b .tab {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    flex: 1; padding: 8px 0; border-radius: 12px;
+  }
+  .nav-b .tab.active { background: rgba(255,77,0,0.12); }
+  .nav-b .tab .emoji { font-size: 22px; }
+  .nav-b .tab .lbl { font-size: 10px; font-weight: 700; color: #444; }
+  .nav-b .tab.active .lbl { color: #FF4D00; }
+
+  /* ── Option C: Top indicator bar ── */
+  .nav-c {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 72px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    position: absolute; bottom: 0; left: 0; right: 0;
+  }
+  .nav-c .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; position: relative; }
+  .nav-c .tab .bar {
+    position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+    width: 24px; height: 2px; border-radius: 0 0 2px 2px; background: transparent;
+  }
+  .nav-c .tab.active .bar { background: #FF4D00; }
+  .nav-c .tab .emoji { font-size: 22px; margin-top: 8px; }
+  .nav-c .tab .lbl { font-size: 10px; font-weight: 600; color: #444; }
+  .nav-c .tab.active .lbl { color: #fff; }
+
+  /* ── Option D: Floating FAB-style center button ── */
+  .nav-d {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 72px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    position: absolute; bottom: 0; left: 0; right: 0;
+  }
+  .nav-d .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 1; }
+  .nav-d .tab .emoji { font-size: 22px; }
+  .nav-d .tab .lbl { font-size: 10px; font-weight: 600; color: #444; }
+  .nav-d .tab.active .lbl { color: #FF4D00; }
+  .nav-d .tab.center { margin-top: -20px; }
+  .nav-d .tab.center .fab {
+    width: 52px; height: 52px; background: #FF4D00; border-radius: 26px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px; box-shadow: 0 4px 16px rgba(255,77,0,0.5);
+  }
+  .nav-d .tab.center .lbl { color: #FF4D00; font-weight: 700; }
+
+  /* ── Option E: Full labels, bigger height ── */
+  .nav-e {
+    display: flex; align-items: center; justify-content: space-around;
+    height: 80px; background: #1A1A1A; border-top: 1px solid #2a2a2a;
+    position: absolute; bottom: 0; left: 0; right: 0;
+  }
+  .nav-e .tab { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+  .nav-e .tab .emoji { font-size: 24px; }
+  .nav-e .tab .lbl { font-size: 11px; font-weight: 700; color: #444; letter-spacing: 0.3px; }
+  .nav-e .tab.active .lbl { color: #FF4D00; }
+  .nav-e .tab .underline { width: 20px; height: 2px; background: transparent; border-radius: 1px; }
+  .nav-e .tab.active .underline { background: #FF4D00; }
+
+  .phone-tall { height: 136px; }
+
+  .vote {
+    text-align: center; margin-top: 12px;
+    font-size: 12px; color: #444;
+  }
+  .tag {
+    display: inline-block; margin-top: 6px;
+    font-size: 10px; padding: 3px 10px; border-radius: 20px;
+    font-weight: 700; letter-spacing: 0.5px;
+  }
+  .tag-recommended { background: rgba(0,210,106,0.15); color: #00D26A; }
+  .tag-current { background: rgba(255,100,100,0.12); color: #ff6464; }
+  .tag-bold { background: rgba(255,77,0,0.12); color: #FF4D00; }
+</style>
+</head>
+<body>
+
+<h1>⚡ Surge — Bottom Nav Options</h1>
+<p class="subtitle">Current nav cuts off "History" → "Hist..." and "Profile" → "Prof...". 5 options below.</p>
+
+<!-- CURRENT (broken) -->
+<div class="section">
+  <div class="section-label">Current — broken</div>
+  <div class="section-desc">Labels get cut off. "History" → "Hist..." "Profile" → "Prof..."</div>
+  <div class="phone">
+    <div class="nav-current">
+      <div class="tab active">
+        <span class="emoji">⚡</span>
+        <span class="lbl" style="color:#FF4D00">Today</span>
+      </div>
+      <div class="tab">
+        <span class="emoji">📅</span>
+        <span class="lbl">Hist...</span>
+      </div>
+      <div class="tab">
+        <span class="emoji">👤</span>
+        <span class="lbl">Prof...</span>
+      </div>
+    </div>
+  </div>
+  <div class="vote"><span class="tag tag-current">❌ Current — broken</span></div>
+</div>
+
+<!-- OPTION A -->
+<div class="section">
+  <div class="section-label">Option A — Icons only</div>
+  <div class="section-desc">No labels. Active tab shown by orange dot underneath. Clean and minimal — like Instagram.</div>
+  <div class="phone">
+    <div class="nav-a">
+      <div class="tab active">
+        <span class="emoji">⚡</span>
+        <div class="dot"></div>
+      </div>
+      <div class="tab">
+        <span class="emoji">📅</span>
+        <div class="dot"></div>
+      </div>
+      <div class="tab">
+        <span class="emoji">👤</span>
+        <div class="dot"></div>
+      </div>
+    </div>
+  </div>
+  <div class="vote"><span class="tag tag-recommended">✓ Recommended — cleanest</span></div>
+</div>
+
+<!-- OPTION B -->
+<div class="section">
+  <div class="section-label">Option B — Pill highlight</div>
+  <div class="section-desc">Shorter labels (Today / Log / Profile). Active tab gets an orange pill background. Used by many fitness apps.</div>
+  <div class="phone">
+    <div class="nav-b">
+      <div class="tab active">
+        <span class="emoji">⚡</span>
+        <span class="lbl" style="color:#FF4D00">Today</span>
+      </div>
+      <div class="tab">
+        <span class="emoji">📅</span>
+        <span class="lbl">Log</span>
+      </div>
+      <div class="tab">
+        <span class="emoji">👤</span>
+        <span class="lbl">Me</span>
+      </div>
+    </div>
+  </div>
+  <div class="vote"><span class="tag tag-bold">Shorter labels fix the cut-off</span></div>
+</div>
+
+<!-- OPTION C -->
+<div class="section">
+  <div class="section-label">Option C — Top bar indicator</div>
+  <div class="section-desc">Orange bar appears at top of active tab. Labels in white when active, grey when inactive. Nike Training Club style.</div>
+  <div class="phone">
+    <div class="nav-c">
+      <div class="tab active">
+        <div class="bar"></div>
+        <span class="emoji">⚡</span>
+        <span class="lbl" style="color:#fff">Today</span>
+      </div>
+      <div class="tab">
+        <div class="bar"></div>
+        <span class="emoji">📅</span>
+        <span class="lbl">Log</span>
+      </div>
+      <div class="tab">
+        <div class="bar"></div>
+        <span class="emoji">👤</span>
+        <span class="lbl">Me</span>
+      </div>
+    </div>
+  </div>
+  <div class="vote"><span class="tag tag-bold">Nike-style</span></div>
+</div>
+
+<!-- OPTION D -->
+<div class="section">
+  <div class="section-label">Option D — FAB center button</div>
+  <div class="section-desc">Today tab becomes a floating orange button in the centre. Bold CTA — forces users to the main logging screen. Aggressive but effective.</div>
+  <div class="phone phone-tall">
+    <div class="nav-d">
+      <div class="tab">
+        <span class="emoji">📅</span>
+        <span class="lbl">Log</span>
+      </div>
+      <div class="tab center">
+        <div class="fab">⚡</div>
+        <span class="lbl" style="color:#FF4D00; font-size:10px;">Today</span>
+      </div>
+      <div class="tab">
+        <span class="emoji">👤</span>
+        <span class="lbl">Me</span>
+      </div>
+    </div>
+  </div>
+  <div class="vote"><span class="tag tag-bold">Bold — drives Today engagement</span></div>
+</div>
+
+<!-- OPTION E -->
+<div class="section">
+  <div class="section-label">Option E — Taller bar, full labels ← implemented</div>
+  <div class="section-desc">Taller bar (80px). Short labels. Better icons: 📊 for Log, ⚙️ for Me. Underline on active. No truncation possible.</div>
+  <div class="phone phone-tall">
+    <div class="nav-e">
+      <div class="tab active">
+        <span class="emoji">⚡</span>
+        <span class="lbl" style="color:#FF4D00">Today</span>
+        <div class="underline"></div>
+      </div>
+      <div class="tab">
+        <span class="emoji">📊</span>
+        <span class="lbl">Log</span>
+        <div class="underline"></div>
+      </div>
+      <div class="tab">
+        <span class="emoji">⚙️</span>
+        <span class="lbl">Me</span>
+        <div class="underline"></div>
+      </div>
+    </div>
+  </div>
+  <div class="vote"><span class="tag tag-recommended">✓ Implemented in app</span></div>
+</div>
+
+<div style="margin-top:16px; padding: 16px; background:#1a1a1a; border-radius:12px; border:1px solid #2a2a2a;">
+  <div style="font-size:11px; font-weight:700; color:#FF4D00; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">My take</div>
+  <div style="font-size:13px; color:#999; line-height:1.6;">
+    <b style="color:#fff">Option A</b> (icons only) is cleanest — no label truncation possible, scales to any screen size, and the orange dot makes the active state obvious.<br><br>
+    <b style="color:#fff">Option E</b> is the lowest effort — just rename the tabs and add 8px height. If you want to keep labels, go E.<br><br>
+    <b style="color:#fff">Option D</b> (FAB) is the most aggressive but best for driving Today screen usage — which is your main feature.
+  </div>
+</div>
+
+</body>
+</html>

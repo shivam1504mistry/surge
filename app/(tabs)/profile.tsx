@@ -15,8 +15,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Colors, FontSize, FontWeight, Radius, Spacing, BOTTOM_SAFE_PADDING } from '../../constants/theme'
 import { useUserStore } from '../../stores/userStore'
 import { supabase } from '../../lib/supabase'
 import SupportButton from '../../components/SupportButton'
@@ -34,6 +34,7 @@ const GOAL_OPTIONS: Goal[] = ['fat_loss', 'muscle_gain', 'recomp', 'maintain', '
 
 export default function ProfileScreen() {
   const { profile, setProfile } = useUserStore()
+  const insets = useSafeAreaInsets()
 
   const [showEdit, setShowEdit]   = useState(false)
   const [saving,   setSaving]     = useState(false)
@@ -170,7 +171,7 @@ export default function ProfileScreen() {
       {/* ── Edit modal ── */}
       <Modal visible={showEdit} animationType="slide" onRequestClose={() => setShowEdit(false)}>
         <SafeAreaView style={styles.modalSafe} edges={['top', 'bottom']}>
-          <View style={styles.modalHeader}>
+          <View style={[styles.modalHeader, { paddingTop: Math.max(insets.top, Spacing.md) }]}>
             <TouchableOpacity onPress={() => setShowEdit(false)}>
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
@@ -254,7 +255,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   safe:    { flex: 1, backgroundColor: Colors.bg },
   scroll:  { flex: 1 },
-  content: { padding: Spacing.md, paddingBottom: Spacing.xxl, gap: Spacing.md },
+  content: { padding: Spacing.md, paddingBottom: BOTTOM_SAFE_PADDING, gap: Spacing.md },
 
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.xs },
   headerTitle: { fontSize: FontSize.xxl, color: Colors.text1, fontWeight: FontWeight.black },

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Audio } from 'expo-av'
+import { Alert, Linking, Platform } from 'react-native'
 // @ts-ignore — legacy import path for readAsStringAsync (new API doesn't support base64 on Android yet)
 import * as FileSystem from 'expo-file-system/legacy'
 import { supabase } from '../lib/supabase'
@@ -26,7 +27,21 @@ export function useVoiceLog() {
     }
 
     try {
-      await Audio.requestPermissionsAsync()
+      const { granted, canAskAgain } = await Audio.requestPermissionsAsync()
+      if (!granted) {
+        if (!canAskAgain) {
+          Alert.alert(
+            'Microphone access needed',
+            'Please enable microphone access for Surge in your device Settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ]
+          )
+        }
+        setError('Microphone permission denied — tap Open Settings to enable it')
+        return
+      }
       await Audio.setAudioModeAsync({
         allowsRecordingIOS:   true,
         playsInSilentModeIOS: true,
@@ -38,7 +53,7 @@ export function useVoiceLog() {
       setIsRecording(true)
       console.log('[useVoiceLog] recording started OK')
     } catch (err: any) {
-      setError('Microphone access failed')
+      setError('Could not start microphone — please try again')
       console.error('[useVoiceLog] startRecording:', err)
     }
   }

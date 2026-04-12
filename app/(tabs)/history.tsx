@@ -19,7 +19,7 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
+import { Colors, FontSize, FontWeight, Radius, Spacing, BOTTOM_SAFE_PADDING } from '../../constants/theme'
 import { supabase } from '../../lib/supabase'
 import SupportButton from '../../components/SupportButton'
 
@@ -342,7 +342,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding:       Spacing.md,
-    paddingBottom: Spacing.xxl,
+    paddingBottom: BOTTOM_SAFE_PADDING,
     gap:           Spacing.md,
   },
 
