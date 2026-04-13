@@ -19,6 +19,7 @@ import {
   Easing,
   ScrollView,
   ActivityIndicator,
+  Linking,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../constants/theme'
@@ -136,6 +137,7 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
   const [hintPhase, setHintPhase]   = useState(true)
   const [parsedExercises, setParsedExercises] = useState<ParsedExercise[]>([])
   const [parsedFoods, setParsedFoods]         = useState<ParsedFood[]>([])
+  const [permDenied, setPermDenied] = useState(false)
   const stubIndex = useRef(0)
 
   // Feedback state
@@ -224,15 +226,29 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
       setParsedFoods([])
       setFeedbackOpen(false)
       setFeedbackSubmitted(false)
+      setPermDenied(false)
       if (!DEV_USE_STUBS) cancelRecording()
       return
     }
     track('voice_log_started')
-    Audio.requestPermissionsAsync().then(({ granted }) => {
-      if (granted) startListening()
-      // If not granted, useVoiceLog.startRecording will surface the error
-      else startListening() // still enter listening UI; error shown when Done is tapped
-    })
+
+    async function checkPermAndStart() {
+      const { granted, canAskAgain } = await Audio.requestPermissionsAsync()
+      console.log('[VoiceModal] mic permission — granted:', granted, 'canAskAgain:', canAskAgain)
+      if (granted) {
+        startListening()
+      } else if (canAskAgain) {
+        // System dialog will appear — wait for it, then check again
+        const result = await Audio.requestPermissionsAsync()
+        console.log('[VoiceModal] after re-request — granted:', result.granted)
+        if (result.granted) startListening()
+        else setPermDenied(true)
+      } else {
+        // Permanently denied — send user to Settings
+        setPermDenied(true)
+      }
+    }
+    checkPermAndStart()
   }, [visible])
 
   async function handleDoneTalking() {
@@ -298,9 +314,45 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
   }
 
   // ---------------------------------------------------------------------------
-  // LISTENING PHASE
+  // PERMISSION DENIED PHASE
   // ---------------------------------------------------------------------------
   if (!visible) return null
+
+  if (permDenied) {
+    return (
+      <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+          <View style={styles.micArea}>
+            <View style={[styles.micCircle, { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border }]}>
+              <Text style={styles.micIcon}>🎤</Text>
+            </View>
+          </View>
+          <Text style={[styles.confirmTitle, { marginTop: Spacing.xl, textAlign: 'center' }]}>
+            Microphone access needed
+          </Text>
+          <Text style={[styles.subtitle, { marginTop: Spacing.md }]}>
+            Surge needs mic access to log your workouts and food by voice.{'\n\n'}
+            Go to Settings → Surge → Microphone and turn it on.
+          </Text>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            style={styles.doneBtn}
+            onPress={() => Linking.openSettings()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.doneBtnText}>Open Settings →</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.6}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </Modal>
+    )
+  }
+
+  // ---------------------------------------------------------------------------
+  // LISTENING PHASE
+  // ---------------------------------------------------------------------------
 
   if (phase === 'listening') {
     return (

@@ -27,6 +27,7 @@
       <dict>
         <key>CFBundleURLSchemes</key>
         <array>
+          <string>surge</string>
           <string>com.shivammistry.surge</string>
         </array>
       </dict>

@@ -2,7 +2,6 @@ import 'react-native-url-polyfill/auto'
 import { createClient } from '@supabase/supabase-js'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as WebBrowser from 'expo-web-browser'
-import * as Linking from 'expo-linking'
 
 // Required for OAuth flow on mobile
 WebBrowser.maybeCompleteAuthSession()
@@ -39,37 +38,37 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
 // Google OAuth — opens in-app browser, handles redirect back automatically
 // ---------------------------------------------------------------------------
 export async function signInWithGoogle() {
-  const redirectTo = Linking.createURL('auth/callback')
+  const redirectTo = 'surge://auth/callback'
+  console.log('[Google OAuth] step 1 — requesting OAuth URL, redirectTo:', redirectTo)
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options:  { redirectTo, skipBrowserRedirect: true },
   })
 
-  if (error || !data?.url) return { error: error ?? new Error('No OAuth URL') }
+  if (error || !data?.url) {
+    console.error('[Google OAuth] step 1 FAILED — no URL returned:', error?.message)
+    return { error: error ?? new Error('No OAuth URL') }
+  }
+  console.log('[Google OAuth] step 2 — opening browser')
 
   const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+  console.log('[Google OAuth] step 3 — browser closed, result type:', result.type)
 
-  if (result.type === 'success') {
-    const { url } = result
-    const params  = new URL(url)
-    const accessToken  = params.searchParams.get('access_token')
-    const refreshToken = params.searchParams.get('refresh_token')
-
-    if (accessToken && refreshToken) {
-      await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-    } else {
-      // Try parsing from hash fragment
-      const hash = url.split('#')[1] ?? ''
-      const hashParams = new URLSearchParams(hash)
-      const at = hashParams.get('access_token')
-      const rt = hashParams.get('refresh_token')
-      if (at && rt) {
-        await supabase.auth.setSession({ access_token: at, refresh_token: rt })
-      }
-    }
+  if (result.type !== 'success') {
+    console.warn('[Google OAuth] step 3 — user cancelled or browser dismissed without redirect')
+    return { error: null }
   }
 
+  console.log('[Google OAuth] step 4 — exchanging code, url:', result.url)
+  const { error: sessionError } = await supabase.auth.exchangeCodeForSession(result.url)
+
+  if (sessionError) {
+    console.error('[Google OAuth] step 4 FAILED — exchangeCodeForSession:', sessionError.message)
+    return { error: sessionError }
+  }
+
+  console.log('[Google OAuth] step 5 — session set successfully')
   return { error: null }
 }
 
