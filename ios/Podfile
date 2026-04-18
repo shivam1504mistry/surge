@@ -104,6 +104,32 @@ target 'surge' do
       File.write(path, content) unless File.exist?(path)
     end
 
+    # Patch EXAV.m — replace EXPermissionsInterface check with AVAudioSession.recordPermission fallback.
+    # When EXPermissionsInterface is not linked (SDK 55 unimodule removal), _permissionsManager is nil,
+    # causing prepareAudioRecorder + startAudioRecording to always reject with E_MISSING_PERMISSION.
+    exav_path = File.join(__dir__, '../node_modules/expo-av/ios/EXAV/EXAV.m')
+    if File.exist?(exav_path)
+      content = File.read(exav_path)
+      old_check = '  if (![_permissionsManager hasGrantedPermissionUsingRequesterClass:[EXAudioRecordingPermissionRequester class]]) {
+    reject(@"E_MISSING_PERMISSION", @"Missing audio recording permission.", nil);
+    return;
+  }
+  if (!_allowsAudioRecording) {'
+      new_check = '  // Surge patch: fall back to AVAudioSession when EXPermissionsInterface is not linked
+  BOOL micGranted = _permissionsManager
+    ? [_permissionsManager hasGrantedPermissionUsingRequesterClass:[EXAudioRecordingPermissionRequester class]]
+    : ([AVAudioSession sharedInstance].recordPermission == AVAudioSessionRecordPermissionGranted);
+  if (!micGranted) {
+    reject(@"E_MISSING_PERMISSION", @"Missing audio recording permission.", nil);
+    return;
+  }
+  if (!_allowsAudioRecording) {'
+      if content.include?(old_check)
+        File.write(exav_path, content.gsub(old_check, new_check))
+        puts 'Surge: patched EXAV.m prepareAudioRecorder permission check'
+      end
+    end
+
     # Fix EXConstants script path quoting — spaces in project path break bash -l -c
     installer.pods_project.targets.each do |target|
       target.build_phases.each do |phase|

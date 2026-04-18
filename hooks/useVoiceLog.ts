@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { Audio } from 'expo-av'
-import { Alert, Linking, Platform } from 'react-native'
+import { Camera } from 'expo-camera'
+import { Alert, Linking, PermissionsAndroid, Platform } from 'react-native'
 // @ts-ignore — legacy import path for readAsStringAsync (new API doesn't support base64 on Android yet)
 import * as FileSystem from 'expo-file-system/legacy'
 import { supabase } from '../lib/supabase'
@@ -27,34 +28,84 @@ export function useVoiceLog() {
     }
 
     try {
-      const { granted, canAskAgain } = await Audio.requestPermissionsAsync()
-      if (!granted) {
-        if (!canAskAgain) {
-          Alert.alert(
-            'Microphone access needed',
-            'Please enable microphone access for Surge in your device Settings.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: () => Linking.openSettings() },
-            ]
-          )
+      // Request microphone permission via expo-camera (uses ExpoModulesCore — works on iOS + Android)
+      // We avoid Audio.requestPermissionsAsync() because expo-av's old ObjC module goes through
+      // EXPermissionsInterface (unimodule) which is not linked and throws "Permissions module not found".
+      if (Platform.OS === 'android') {
+        // Android fallback: RN built-in PermissionsAndroid (always available)
+        const result = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          {
+            title:   'Microphone access needed',
+            message: 'Surge uses your microphone to log workouts and food by voice.',
+            buttonPositive: 'Allow',
+            buttonNegative: 'Not now',
+          }
+        )
+        if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+          if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+            Alert.alert(
+              'Microphone access needed',
+              'Please enable microphone access for Surge in your device Settings.',
+              [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              ]
+            )
+          }
+          setError('Microphone permission not granted — please try again')
+          return
         }
-        setError('Microphone permission denied — tap Open Settings to enable it')
+      } else {
+        // iOS: use expo-camera's mic permission API — this goes through ExpoModulesCore,
+        // NOT the broken EXPermissionsInterface, so it correctly shows the system dialog.
+        const { granted, canAskAgain } = await Camera.requestMicrophonePermissionsAsync()
+        console.log('[useVoiceLog] iOS mic permission via expo-camera — granted:', granted, 'canAskAgain:', canAskAgain)
+        if (!granted) {
+          if (!canAskAgain) {
+            Alert.alert(
+              'Microphone access needed',
+              'Please enable microphone access for Surge in Settings → Privacy & Security → Microphone.',
+              [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Open Settings', onPress: () => Linking.openSettings() },
+              ]
+            )
+            setError('Microphone access denied — open Settings to enable it')
+          } else {
+            setError('Microphone permission not granted — please try again')
+          }
+          return
+        }
+      }
+
+      // Configure audio session for recording (required on iOS)
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS:   true,
+          playsInSilentModeIOS: true,
+        })
+        console.log('[useVoiceLog] setAudioModeAsync OK')
+      } catch (modeErr: any) {
+        console.error('[useVoiceLog] setAudioModeAsync FAILED:', modeErr?.message)
+        setError(`Audio session error: ${modeErr?.message ?? 'unknown'}`)
         return
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS:   true,
-        playsInSilentModeIOS: true,
-      })
-      const { recording: rec } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      )
-      recording.current = rec
-      setIsRecording(true)
-      console.log('[useVoiceLog] recording started OK')
+
+      try {
+        const { recording: rec } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        )
+        recording.current = rec
+        setIsRecording(true)
+        console.log('[useVoiceLog] recording started OK')
+      } catch (recErr: any) {
+        console.error('[useVoiceLog] createAsync FAILED:', recErr?.message, recErr?.code)
+        setError(`Mic error: ${recErr?.message ?? 'unknown'}`)
+      }
     } catch (err: any) {
-      setError('Could not start microphone — please try again')
-      console.error('[useVoiceLog] startRecording:', err)
+      console.error('[useVoiceLog] startRecording unexpected error:', err)
+      setError(`Unexpected error: ${err?.message ?? 'unknown'}`)
     }
   }
 

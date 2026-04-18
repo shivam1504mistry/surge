@@ -8,7 +8,7 @@
  * Falls back to stub data if edge function is not deployed (DEV_USE_STUBS = true).
  */
 import React, { useEffect, useRef, useState } from 'react'
-import { Audio } from 'expo-av'
+
 import {
   Modal,
   View,
@@ -231,22 +231,9 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
       return
     }
     track('voice_log_started')
-
-    async function checkPermAndStart() {
-      const { granted, canAskAgain } = await Audio.requestPermissionsAsync()
-      console.log('[VoiceModal] mic permission — granted:', granted, 'canAskAgain:', canAskAgain)
-      if (granted) {
-        // Already granted — start immediately
-        startListening()
-      } else if (canAskAgain) {
-        // Not yet asked — iOS will show system dialog automatically when recording starts
-        startListening()
-      } else {
-        // Permanently denied — send user to Settings
-        setPermDenied(true)
-      }
-    }
-    checkPermAndStart()
+    // Permission is handled inside startRecording() in useVoiceLog —
+    // one place, one dialog, waits for user response before proceeding.
+    startListening()
   }, [visible])
 
   async function handleDoneTalking() {
