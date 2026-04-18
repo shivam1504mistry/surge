@@ -158,7 +158,11 @@ export default function ProfileScreen() {
             style={styles.signOutBtn}
             onPress={() => Alert.alert('Sign out', 'Are you sure?', [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Sign out', style: 'destructive', onPress: async () => { await supabase.auth.signOut() } },
+              { text: 'Sign out', style: 'destructive', onPress: async () => {
+                await supabase.auth.signOut()
+                useUserStore.getState().setSession(null)
+                useUserStore.getState().setProfile(null)
+              }},
             ])}
             activeOpacity={0.8}
           >

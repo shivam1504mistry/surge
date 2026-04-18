@@ -16,6 +16,8 @@ import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
 import { Sex } from '../../constants/macros'
+import { supabase } from '../../lib/supabase'
+import { useUserStore } from '../../stores/userStore'
 
 type RootParamList = {
   Goals: { name: string; age: number; sex: Sex; weight_kg: number; height_cm: number }
@@ -227,6 +229,18 @@ export default function ProfileSetupScreen() {
           <TouchableOpacity style={styles.cta} onPress={handleNext} activeOpacity={0.85}>
             <Text style={styles.ctaText}>Next →</Text>
           </TouchableOpacity>
+
+          {/* Sign out escape hatch */}
+          <TouchableOpacity
+            style={styles.signOutLink}
+            onPress={async () => {
+              await supabase.auth.signOut()
+              useUserStore.getState().setSession(null)
+              useUserStore.getState().setProfile(null)
+            }}
+          >
+            <Text style={styles.signOutText}>Sign out</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -314,4 +328,6 @@ const styles = StyleSheet.create({
     marginTop: Spacing.sm,
   },
   ctaText: { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: '#fff' },
+  signOutLink: { alignItems: 'center', paddingVertical: Spacing.sm },
+  signOutText: { fontSize: FontSize.sm, color: Colors.text3 },
 })

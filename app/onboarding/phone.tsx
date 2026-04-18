@@ -228,28 +228,6 @@ export default function WelcomeScreen() {
               {/* Auth buttons */}
               <View style={styles.authButtons}>
                 <TouchableOpacity
-                  style={[styles.googleBtn, loading && styles.btnDisabled]}
-                  onPress={handleGoogleSignIn}
-                  disabled={loading}
-                  activeOpacity={0.85}
-                >
-                  {loading ? (
-                    <ActivityIndicator color={Colors.bg} />
-                  ) : (
-                    <>
-                      <Text style={styles.googleIcon}>G</Text>
-                      <Text style={styles.googleLabel}>Continue with Google</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <View style={styles.dividerRow}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>or</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                <TouchableOpacity
                   style={styles.phoneBtn}
                   onPress={() => setMode('phone')}
                   activeOpacity={0.85}

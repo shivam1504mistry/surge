@@ -236,13 +236,11 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
       const { granted, canAskAgain } = await Audio.requestPermissionsAsync()
       console.log('[VoiceModal] mic permission — granted:', granted, 'canAskAgain:', canAskAgain)
       if (granted) {
+        // Already granted — start immediately
         startListening()
       } else if (canAskAgain) {
-        // System dialog will appear — wait for it, then check again
-        const result = await Audio.requestPermissionsAsync()
-        console.log('[VoiceModal] after re-request — granted:', result.granted)
-        if (result.granted) startListening()
-        else setPermDenied(true)
+        // Not yet asked — iOS will show system dialog automatically when recording starts
+        startListening()
       } else {
         // Permanently denied — send user to Settings
         setPermDenied(true)

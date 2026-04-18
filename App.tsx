@@ -49,7 +49,7 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-import { supabase } from "./lib/supabase";
+import { supabase, handleOAuthCallback } from "./lib/supabase";
 import { useUserStore } from "./stores/userStore";
 import { Linking } from "react-native";
 import { Colors } from "./constants/theme";
@@ -277,7 +277,30 @@ export default function App() {
         loadProfile(session.user.id)
       }
     });
-    return () => subscription.unsubscribe();
+
+    // Handle Google OAuth callback deep link on Android.
+    // When Chrome redirects to surge://auth/callback?code=xxx, Android fires
+    // an Intent that brings the app to the foreground. We catch it here and
+    // exchange the code for a session. onAuthStateChange above then fires and
+    // updates the navigator automatically.
+    const handleOAuthDeepLink = async (url: string | null) => {
+      if (!url) return
+      if (!url.startsWith('surge://auth/callback')) return
+      console.log('[OAuth deep link] handling:', url)
+      const { error } = await handleOAuthCallback(url)
+      if (error) console.error('[OAuth deep link] failed:', error.message)
+    }
+
+    // Cold-start: app was opened directly via the deep link
+    Linking.getInitialURL().then(handleOAuthDeepLink)
+
+    // Warm-start: app was already running / backgrounded
+    const linkingSub = Linking.addEventListener('url', ({ url }) => handleOAuthDeepLink(url))
+
+    return () => {
+      subscription.unsubscribe()
+      linkingSub.remove()
+    }
   }, []);
 
   return (

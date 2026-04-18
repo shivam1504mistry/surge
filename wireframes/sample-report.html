@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Surge Daily Report — Sample</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+    background: #f4f4f4;
+    padding: 32px 16px;
+    color: #1a1a1a;
+  }
+
+  .page {
+    background: #fff;
+    max-width: 480px;
+    margin: 0 auto;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+  }
+
+  /* ── Header ── */
+  .header {
+    background: #0D0D0D;
+    padding: 24px 24px 20px;
+  }
+  .header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-emoji { font-size: 22px; }
+  .logo-text {
+    font-size: 18px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 3px;
+  }
+  .date-badge {
+    background: rgba(255,77,0,0.15);
+    border: 1px solid rgba(255,77,0,0.4);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: #FF4D00;
+    font-weight: 600;
+  }
+  .athlete-row {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .athlete-avatar {
+    width: 36px; height: 36px;
+    border-radius: 18px;
+    background: rgba(255,77,0,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+  }
+  .athlete-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .athlete-goal {
+    font-size: 12px;
+    color: #888;
+    margin-top: 1px;
+  }
+
+  /* ── Section ── */
+  .section { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; }
+  .section:last-child { border-bottom: none; }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #FF4D00;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+
+  /* ── Macro summary ── */
+  .macro-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .macro-card {
+    background: #fafafa;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 10px 6px;
+    text-align: center;
+  }
+  .macro-value {
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .macro-unit {
+    font-size: 10px;
+    color: #aaa;
+    margin-top: 2px;
+  }
+  .macro-label {
+    font-size: 10px;
+    color: #888;
+    margin-top: 3px;
+    font-weight: 600;
+  }
+  .c { color: #FF4D00; }
+  .p { color: #00D26A; }
+  .cb { color: #3B82F6; }
+  .f { color: #F59E0B; }
+
+  /* ── Progress bar ── */
+  .bar-row { margin-bottom: 10px; }
+  .bar-row:last-child { margin-bottom: 0; }
+  .bar-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 5px;
+    font-weight: 500;
+  }
+  .bar-track {
+    height: 6px;
+    background: #eee;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+  }
+
+  /* ── Meals ── */
+  .meal { margin-bottom: 14px; }
+  .meal:last-child { margin-bottom: 0; }
+  .meal-slot {
+    font-size: 11px;
+    font-weight: 700;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+  }
+  .food-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px solid #f5f5f5;
+  }
+  .food-item:last-child { border-bottom: none; }
+  .food-name { font-size: 13px; color: #222; font-weight: 500; }
+  .food-serving { font-size: 11px; color: #aaa; margin-top: 1px; }
+  .food-cals { font-size: 13px; font-weight: 700; color: #555; }
+
+  /* ── Workout ── */
+  .exercise { margin-bottom: 14px; }
+  .exercise:last-child { margin-bottom: 0; }
+  .exercise-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #222;
+    margin-bottom: 6px;
+  }
+  .sets-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .set-chip {
+    background: #fafafa;
+    border: 1px solid #eee;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    color: #555;
+    font-weight: 600;
+  }
+  .pr-chip {
+    background: rgba(255,77,0,0.08);
+    border: 1px solid rgba(255,77,0,0.25);
+    color: #FF4D00;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 6px;
+    padding: 4px 8px;
+  }
+
+  /* ── Footer ── */
+  .footer {
+    background: #fafafa;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid #eee;
+  }
+  .footer-brand {
+    font-size: 11px;
+    color: #bbb;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .footer-brand span { color: #FF4D00; }
+  .footer-note {
+    font-size: 10px;
+    color: #ccc;
+  }
+  .footer-download { text-align: right; }
+  .footer-download-label { font-size: 10px; color: #bbb; margin-bottom: 2px; }
+  .footer-download-link {
+    font-size: 11px;
+    color: #FF4D00;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .receiver-row {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .receiver-label {
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .receiver-name {
+    font-size: 13px;
+    color: #FF4D00;
+    font-weight: 700;
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="logo">
+        <span class="logo-emoji">⚡</span>
+        <span class="logo-text">SURGE</span>
+      </div>
+      <span class="date-badge">Fri, 18 Apr 2026</span>
+    </div>
+    <div class="athlete-row">
+      <div class="athlete-avatar">⚡</div>
+      <div>
+        <div class="athlete-name">Shivam Mistry</div>
+        <div class="athlete-goal">Fat Loss · 78 kg</div>
+      </div>
+    </div>
+    <div class="receiver-row">
+      <span class="receiver-label">Report for</span>
+      <span class="receiver-name">Coach Rahul</span>
+    </div>
+  </div>
+
+  <!-- Nutrition Summary -->
+  <div class="section">
+    <div class="section-title">Nutrition</div>
+
+    <div class="macro-grid">
+      <div class="macro-card">
+        <div class="macro-value c">1,840</div>
+        <div class="macro-unit">/ 2,100 kcal</div>
+        <div class="macro-label">Calories</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-value p">148</div>
+        <div class="macro-unit">/ 175 g</div>
+        <div class="macro-label">Protein</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-value cb">186</div>
+        <div class="macro-unit">/ 220 g</div>
+        <div class="macro-label">Carbs</div>
+      </div>
+      <div class="macro-card">
+        <div class="macro-value f">54</div>
+        <div class="macro-unit">/ 70 g</div>
+        <div class="macro-label">Fat</div>
+      </div>
+    </div>
+
+    <!-- Progress bars -->
+    <div class="bar-row">
+      <div class="bar-meta"><span>Calories</span><span>88%</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:88%;background:#FF4D00"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-meta"><span>Protein</span><span>85%</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:85%;background:#00D26A"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-meta"><span>Carbs</span><span>85%</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:85%;background:#3B82F6"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-meta"><span>Fat</span><span>77%</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:77%;background:#F59E0B"></div></div>
+    </div>
+  </div>
+
+  <!-- Meals -->
+  <div class="section">
+    <div class="section-title">Food Log</div>
+
+    <div class="meal">
+      <div class="meal-slot">Breakfast</div>
+      <div class="food-item">
+        <div>
+          <div class="food-name">Oats with milk</div>
+          <div class="food-serving">1 bowl · 80g oats, 200ml milk</div>
+        </div>
+        <div class="food-cals">380 kcal</div>
+      </div>
+      <div class="food-item">
+        <div>
+          <div class="food-name">Boiled eggs</div>
+          <div class="food-serving">3 whole eggs</div>
+        </div>
+        <div class="food-cals">210 kcal</div>
+      </div>
+    </div>
+
+    <div class="meal">
+      <div class="meal-slot">Lunch</div>
+      <div class="food-item">
+        <div>
+          <div class="food-name">Dal rice</div>
+          <div class="food-serving">1 katori dal, 1.5 cups rice</div>
+        </div>
+        <div class="food-cals">520 kcal</div>
+      </div>
+      <div class="food-item">
+        <div>
+          <div class="food-name">Curd</div>
+          <div class="food-serving">100g</div>
+        </div>
+        <div class="food-cals">60 kcal</div>
+      </div>
+    </div>
+
+    <div class="meal">
+      <div class="meal-slot">Dinner</div>
+      <div class="food-item">
+        <div>
+          <div class="food-name">Paneer bhurji</div>
+          <div class="food-serving">150g paneer, 2 rotis</div>
+        </div>
+        <div class="food-cals">480 kcal</div>
+      </div>
+    </div>
+
+    <div class="meal">
+      <div class="meal-slot">Snacks</div>
+      <div class="food-item">
+        <div>
+          <div class="food-name">Whey protein shake</div>
+          <div class="food-serving">1 scoop, 250ml water</div>
+        </div>
+        <div class="food-cals">130 kcal</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workout -->
+  <div class="section">
+    <div class="section-title">Workout · Push Day</div>
+
+    <div class="exercise">
+      <div class="exercise-name">Bench Press</div>
+      <div class="sets-row">
+        <span class="set-chip">80kg × 8</span>
+        <span class="set-chip">82.5kg × 6</span>
+        <span class="set-chip">85kg × 5</span>
+        <span class="pr-chip">⚡ PR</span>
+      </div>
+    </div>
+
+    <div class="exercise">
+      <div class="exercise-name">Overhead Press</div>
+      <div class="sets-row">
+        <span class="set-chip">50kg × 10</span>
+        <span class="set-chip">52.5kg × 8</span>
+        <span class="set-chip">52.5kg × 7</span>
+      </div>
+    </div>
+
+    <div class="exercise">
+      <div class="exercise-name">Incline Dumbbell Press</div>
+      <div class="sets-row">
+        <span class="set-chip">28kg × 12</span>
+        <span class="set-chip">28kg × 10</span>
+        <span class="set-chip">26kg × 10</span>
+      </div>
+    </div>
+
+    <div class="exercise">
+      <div class="exercise-name">Tricep Pushdown</div>
+      <div class="sets-row">
+        <span class="set-chip">30kg × 15</span>
+        <span class="set-chip">32.5kg × 12</span>
+        <span class="set-chip">32.5kg × 10</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div>
+      <div class="footer-brand">⚡ <span>SURGE</span></div>
+      <div class="footer-note">Generated 18 Apr 2026, 9:42 PM</div>
+    </div>
+    <div class="footer-download">
+      <div class="footer-download-label">Try Surge free</div>
+      <a class="footer-download-link" href="https://expo.dev/accounts/shivammistry/projects/surge">Download the app →</a>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
