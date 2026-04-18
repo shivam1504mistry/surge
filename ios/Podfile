@@ -68,5 +68,54 @@ target 'surge' do
         config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
       end
     end
+
+    # Shim legacy expo-av headers removed from ExpoModulesCore
+    expo_core_headers = File.join(__dir__, 'Pods/Headers/Public/ExpoModulesCore/ExpoModulesCore')
+    {
+      'EXEventEmitter.h' => <<~OBJC,
+        #pragma once
+        #import <Foundation/Foundation.h>
+        @protocol EXEventEmitter <NSObject>
+        - (NSArray<NSString *> *)supportedEvents;
+        - (void)startObserving;
+        - (void)stopObserving;
+        @optional
+        - (void)sendEventWithName:(NSString *)eventName body:(id)body;
+        @end
+      OBJC
+      'EXEventEmitterService.h' => <<~OBJC,
+        #pragma once
+        #import <Foundation/Foundation.h>
+        @protocol EXEventEmitterService <NSObject>
+        - (void)registerEventEmitterModule:(id)module;
+        - (void)sendEventWithName:(NSString *)eventName body:(id)body;
+        @end
+      OBJC
+      'EXLegacyExpoViewProtocol.h' => <<~OBJC,
+        #pragma once
+        #import <Foundation/Foundation.h>
+        @protocol EXLegacyExpoViewProtocol <NSObject>
+        @optional
+        - (void)setModuleRegistry:(id)moduleRegistry;
+        @end
+      OBJC
+    }.each do |filename, content|
+      path = File.join(expo_core_headers, filename)
+      File.write(path, content) unless File.exist?(path)
+    end
+
+    # Fix EXConstants script path quoting — spaces in project path break bash -l -c
+    installer.pods_project.targets.each do |target|
+      target.build_phases.each do |phase|
+        next unless phase.respond_to?(:shell_script)
+        if phase.shell_script&.include?('get-app-config-ios.sh') &&
+           phase.shell_script&.include?('bash -l -c')
+          phase.shell_script = phase.shell_script.gsub(
+            /bash -l -c \\"(\$PODS_TARGET_SRCROOT[^"]+)\\"/,
+            'bash "\1"'
+          )
+        end
+      end
+    end
   end
 end

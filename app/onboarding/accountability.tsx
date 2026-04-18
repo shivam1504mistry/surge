@@ -2,7 +2,8 @@
 // This is the final onboarding step. On completion:
 //   1. Calculate TDEE/macros via calculateTargets()
 //   2. Upsert to users table
-//   3. Set profile in userStore → App.tsx navigates to MainTabs automatically
+//   3. Send coach WhatsApp notification via send-whatsapp Edge Function
+//   4. Set profile in userStore → App.tsx navigates to MainTabs automatically
 import React, { useState } from 'react'
 import {
   View,
@@ -16,6 +17,8 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Modal,
+  FlatList,
 } from 'react-native'
 import { useRoute } from '@react-navigation/native'
 import { RouteProp } from '@react-navigation/native'
@@ -31,6 +34,19 @@ type BaseParams = {
 }
 type RootParamList = { Accountability: BaseParams }
 
+const APP_DOWNLOAD_LINK = 'https://expo.dev/accounts/shivam1504mistry/projects/surge/builds/ad01b2eb-7f53-4d02-b33b-e2d710fbb4dd'
+
+const ACC_COUNTRIES = [
+  { flag: '🇮🇳', name: 'India',         code: '+91',  maxLen: 10 },
+  { flag: '🇺🇸', name: 'United States', code: '+1',   maxLen: 10 },
+  { flag: '🇬🇧', name: 'United Kingdom',code: '+44',  maxLen: 10 },
+  { flag: '🇦🇪', name: 'UAE',           code: '+971', maxLen: 9  },
+  { flag: '🇸🇬', name: 'Singapore',     code: '+65',  maxLen: 8  },
+  { flag: '🇦🇺', name: 'Australia',     code: '+61',  maxLen: 9  },
+  { flag: '🇨🇦', name: 'Canada',        code: '+1',   maxLen: 10 },
+]
+type AccCountry = typeof ACC_COUNTRIES[number]
+
 type Freq = 'daily' | 'weekly'
 
 const FREQ_OPTIONS: { value: Freq; label: string; desc: string }[] = [
@@ -44,11 +60,13 @@ export default function AccountabilityScreen() {
   const setProfile = useUserStore((s) => s.setProfile)
   const session    = useUserStore((s) => s.session)
 
-  const [accName,  setAccName]  = useState('')
-  const [accPhone, setAccPhone] = useState('')
-  const [accFreq,  setAccFreq]  = useState<Freq>('weekly')
-  const [skip,     setSkip]     = useState(false)
-  const [saving,   setSaving]   = useState(false)
+  const [accName,     setAccName]     = useState('')
+  const [accPhone,    setAccPhone]    = useState('')
+  const [accCountry,  setAccCountry]  = useState<AccCountry>(ACC_COUNTRIES[0])
+  const [showPicker,  setShowPicker]  = useState(false)
+  const [accFreq,     setAccFreq]     = useState<Freq>('weekly')
+  const [skip,        setSkip]        = useState(false)
+  const [saving,      setSaving]      = useState(false)
 
   // Editable targets — pre-filled from calculation, user can override
   const defaultTargets = React.useMemo(() => calculateTargets({
@@ -61,7 +79,8 @@ export default function AccountabilityScreen() {
   const [fatG,      setFatG]      = useState(String(defaultTargets.fat_g))
 
   async function handleFinish() {
-    if (!skip && accPhone && accPhone.length < 10) {
+    const cleanedPhone = accPhone.replace(/\D/g, '')
+    if (!skip && accPhone && cleanedPhone.length < 6) {
       Alert.alert('Enter a valid phone number for your accountability partner')
       return
     }
@@ -70,6 +89,10 @@ export default function AccountabilityScreen() {
     try {
       const user = session?.user
       if (!user) throw new Error('Not authenticated')
+
+      const fullPhone = !skip && cleanedPhone
+        ? `${accCountry.code}${cleanedPhone}`
+        : undefined
 
       const profileData = {
         id:                   user.id,
@@ -88,12 +111,22 @@ export default function AccountabilityScreen() {
         fat_target_g:         parseInt(fatG)      || defaultTargets.fat_g,
         tier:                 'free' as const,
         accountability_name:  skip ? undefined : accName.trim() || undefined,
-        accountability_phone: skip ? undefined : accPhone.trim() || undefined,
+        accountability_phone: fullPhone,
         accountability_freq:  skip ? undefined : accFreq,
       }
 
       const { error } = await supabase.from('users').upsert(profileData)
       if (error) throw error
+
+      // Send coach welcome WhatsApp (fire-and-forget — don't block navigation on failure)
+      if (fullPhone && accName.trim()) {
+        const coachName  = accName.trim()
+        const freqLabel  = accFreq === 'daily' ? 'daily evening' : 'weekly'
+        const welcomeMsg = `Hey ${coachName}! 👋\n\n*${params.name}* has added you as their accountability coach on Surge ⚡\n\nYou'll receive a *${freqLabel} fitness report* on this number automatically — workouts logged, macros hit, progress made.\n\nGet Surge for yourself:\n${APP_DOWNLOAD_LINK}`
+        supabase.functions.invoke('send-whatsapp', {
+          body: { to: fullPhone, message: welcomeMsg },
+        }).catch((e: any) => console.warn('Coach WhatsApp failed (non-blocking):', e))
+      }
 
       setProfile(profileData)
       // App.tsx detects profile != null → navigates to MainTabs
@@ -173,17 +206,18 @@ export default function AccountabilityScreen() {
               <View style={styles.field}>
                 <Text style={styles.label}>WhatsApp number</Text>
                 <View style={styles.phoneRow}>
-                  <View style={styles.flag}>
-                    <Text style={styles.flagText}>🇮🇳 +91</Text>
-                  </View>
+                  <TouchableOpacity style={styles.countryChip} onPress={() => setShowPicker(true)} activeOpacity={0.75}>
+                    <Text style={styles.countryChipText}>{accCountry.flag} {accCountry.code}</Text>
+                    <Text style={styles.countryChipArrow}>▾</Text>
+                  </TouchableOpacity>
                   <TextInput
                     style={[styles.input, styles.phoneInput]}
                     value={accPhone}
-                    onChangeText={(v) => setAccPhone(v.replace(/\D/g, '').slice(0, 10))}
+                    onChangeText={(v) => setAccPhone(v.replace(/\D/g, '').slice(0, accCountry.maxLen))}
                     placeholder="98765 43210"
                     placeholderTextColor={Colors.text3}
                     keyboardType="phone-pad"
-                    maxLength={10}
+                    maxLength={accCountry.maxLen}
                   />
                 </View>
               </View>
@@ -232,6 +266,30 @@ export default function AccountabilityScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Country picker modal */}
+      <Modal visible={showPicker} animationType="slide" transparent onRequestClose={() => setShowPicker(false)}>
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>Select country</Text>
+            <FlatList
+              data={ACC_COUNTRIES}
+              keyExtractor={item => item.code + item.name}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.pickerRow, item.name === accCountry.name && styles.pickerRowSelected]}
+                  onPress={() => { setAccCountry(item); setAccPhone(''); setShowPicker(false) }}
+                >
+                  <Text style={styles.pickerFlag}>{item.flag}</Text>
+                  <Text style={styles.pickerName}>{item.name}</Text>
+                  <Text style={styles.pickerCode}>{item.code}</Text>
+                  {item.name === accCountry.name && <Text style={styles.pickerCheck}>✓</Text>}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -283,18 +341,57 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   phoneRow: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'center' },
-  flag: {
-    height: 52,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+  countryChip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               4,
+    height:            52,
+    paddingHorizontal: Spacing.sm,
+    backgroundColor:   Colors.surface,
+    borderRadius:      Radius.md,
+    borderWidth:       1,
+    borderColor:       Colors.border,
   },
-  flagText: { fontSize: FontSize.base, color: Colors.text1, fontWeight: FontWeight.medium },
+  countryChipText: { fontSize: FontSize.base, color: Colors.text1, fontWeight: FontWeight.semibold },
+  countryChipArrow: { fontSize: 10, color: Colors.text3, marginTop: 2 },
   phoneInput: { flex: 1 },
+
+  // Country picker modal
+  pickerOverlay: {
+    flex:            1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent:  'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor:      Colors.surface,
+    borderTopLeftRadius:  20,
+    borderTopRightRadius: 20,
+    paddingTop:           Spacing.md,
+    paddingBottom:        Spacing.xxl,
+    maxHeight:            '60%',
+  },
+  pickerTitle: {
+    fontSize:          FontSize.md,
+    fontWeight:        FontWeight.bold,
+    color:             Colors.text1,
+    textAlign:         'center',
+    paddingBottom:     Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    marginBottom:      Spacing.xs,
+  },
+  pickerRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical:   Spacing.md,
+    gap:               Spacing.md,
+  },
+  pickerRowSelected: { backgroundColor: Colors.accentSoft },
+  pickerFlag:  { fontSize: 24 },
+  pickerName:  { flex: 1, fontSize: FontSize.base, color: Colors.text1, fontWeight: FontWeight.medium },
+  pickerCode:  { fontSize: FontSize.base, color: Colors.text2 },
+  pickerCheck: { fontSize: FontSize.base, color: Colors.accent, fontWeight: FontWeight.bold },
 
   freqRow: { gap: Spacing.xs },
   freqBtn: {

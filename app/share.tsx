@@ -1,11 +1,15 @@
 /**
- * share.tsx — Share Card screen
+ * share.tsx — Share screen
  *
- * Two features:
- * 1. One-time share — capture card as PNG → WhatsApp deep link / native share sheet / save to camera roll
- * 2. Scheduled report — store accountability phone + frequency → sends via Interakt (P0: store pref only)
+ * Section 1: PDF Report
+ *   - Preset date ranges (Today / Last 3 days / Last 7 days)
+ *   - Optional receiver name
+ *   - Generates one PDF per day → share sheet per PDF
+ *
+ * Section 2: Scheduled report
+ *   - Store accountability phone + frequency in Supabase
  */
-import React, { useRef, useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import {
   View,
   Text,
@@ -16,143 +20,151 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  Linking,
-  Platform,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import ViewShot from 'react-native-view-shot'
-import * as MediaLibrary from 'expo-media-library'
 import * as Sharing from 'expo-sharing'
 import { useNavigation } from '@react-navigation/native'
-import { Colors, FontSize, FontWeight, Radius, Spacing } from '../constants/theme'
-import ShareCard, { ShareCardData } from '../components/ShareCard'
-import { useWorkoutStore } from '../stores/workoutStore'
-import { useNutritionStore } from '../stores/nutritionStore'
+import { Colors, FontSize, FontWeight, Radius, Spacing, BOTTOM_SAFE_PADDING } from '../constants/theme'
 import { useUserStore } from '../stores/userStore'
 import { supabase } from '../lib/supabase'
 import { track } from '../lib/analytics'
+import {
+  generateReports,
+  GeneratedPDF,
+  todayISO,
+  daysAgoISO,
+  formatDisplayDate,
+} from '../lib/generateReport'
 
 // ---------------------------------------------------------------------------
+// Date range presets
+// ---------------------------------------------------------------------------
+type RangeKey = 'today' | '3days' | '7days'
 
+const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+  { key: 'today',  label: 'Today' },
+  { key: '3days',  label: 'Last 3 days' },
+  { key: '7days',  label: 'Last 7 days' },
+]
+
+function rangeForKey(key: RangeKey): { startDate: string; endDate: string } {
+  const end = todayISO()
+  const start = key === 'today'  ? todayISO()
+              : key === '3days'  ? daysAgoISO(2)
+              : daysAgoISO(6)
+  return { startDate: start, endDate: end }
+}
+
+// ---------------------------------------------------------------------------
+// Screen
+// ---------------------------------------------------------------------------
 export default function ShareScreen() {
   const navigation = useNavigation<any>()
-  const viewShotRef = useRef<ViewShot>(null)
+  const { profile } = useUserStore()
 
-  const { todayExercises } = useWorkoutStore()
-  const { getDailyTotals }  = useNutritionStore()
-  const { profile }         = useUserStore()
+  // ── PDF state ──
+  const [rangeKey,       setRangeKey]       = useState<RangeKey>('today')
+  const [receiverName,   setReceiverName]   = useState(profile?.accountability_name ?? '')
+  const [generating,     setGenerating]     = useState(false)
+  const [generatedPDFs,  setGeneratedPDFs]  = useState<GeneratedPDF[]>([])
+  const [sharingIndex,   setSharingIndex]   = useState<number | null>(null)
 
-  const [capturing, setCapturing] = useState(false)
-  const [capturedUri, setCapturedUri] = useState<string | null>(null)
-
-  // Schedule state
+  // ── Schedule state ──
   const [scheduleEnabled, setScheduleEnabled] = useState(
     !!(profile?.accountability_phone && profile?.accountability_freq)
   )
-  const [schedPhone, setSchedPhone] = useState(profile?.accountability_phone ?? '')
-  const [schedFreq,  setSchedFreq]  = useState<'daily' | 'weekly'>(
+  const [schedPhone,     setSchedPhone]     = useState(profile?.accountability_phone ?? '')
+  const [schedFreq,      setSchedFreq]      = useState<'daily' | 'weekly'>(
     profile?.accountability_freq ?? 'weekly'
   )
   const [savingSchedule, setSavingSchedule] = useState(false)
+  const [sendingTest,    setSendingTest]    = useState(false)
 
   // ---------------------------------------------------------------------------
-  // Build card data
+  // Generate PDFs
   // ---------------------------------------------------------------------------
-  const macros  = getDailyTotals()
-  const targets = {
-    calories:  profile?.calorie_target    ?? 0,
-    protein_g: profile?.protein_target_g  ?? 0,
-    carbs_g:   profile?.carbs_target_g    ?? 0,
-    fat_g:     profile?.fat_target_g      ?? 0,
-  }
+  async function handleGenerate() {
+    if (!profile) return
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
-  const cardData: ShareCardData = {
-    date:      new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' }),
-    userName:  profile?.name ?? 'Surge User',
-    exercises: todayExercises.map(ex => ({
-      name:      ex.exercise_name,
-      sets:      ex.sets.length,
-      topWeight: Math.max(0, ...ex.sets.map(s => s.weight_kg)),
-      topReps:   ex.sets[ex.sets.length - 1]?.reps ?? 0,
-    })),
-    macros,
-    targets,
-  }
-
-  // ---------------------------------------------------------------------------
-  // Capture card as PNG
-  // ---------------------------------------------------------------------------
-  async function captureCard(): Promise<string | null> {
-    if (!viewShotRef.current) return null
-    setCapturing(true)
+    setGenerating(true)
+    setGeneratedPDFs([])
     try {
-      const uri = await (viewShotRef.current as any).capture()
-      setCapturedUri(uri)
-      track('share_card_generated')
-      return uri
+      const { startDate, endDate } = rangeForKey(rangeKey)
+      const pdfs = await generateReports({
+        userId:       user.id,
+        startDate,
+        endDate,
+        receiverName: receiverName.trim() || undefined,
+        profile: {
+          name:             profile.name,
+          goal:             profile.goal,
+          weight_kg:        profile.weight_kg,
+          calorie_target:   profile.calorie_target,
+          protein_target_g: profile.protein_target_g,
+          carbs_target_g:   profile.carbs_target_g,
+          fat_target_g:     profile.fat_target_g,
+        },
+      })
+      setGeneratedPDFs(pdfs)
+      track('pdf_report_generated', { range: rangeKey, days: pdfs.length })
     } catch (err: any) {
-      Alert.alert('Error', 'Could not generate card. Please try again.')
-      return null
+      Alert.alert('Could not generate report', err.message ?? 'Please try again.')
     } finally {
-      setCapturing(false)
+      setGenerating(false)
     }
   }
 
   // ---------------------------------------------------------------------------
-  // Share actions
+  // Share a single PDF
   // ---------------------------------------------------------------------------
-  async function shareToWhatsApp() {
-    const uri = capturedUri ?? await captureCard()
-    if (!uri) return
-
-    // WhatsApp deep link — opens WhatsApp with image attached
-    const whatsappUrl = `whatsapp://send?text=My%20Surge%20log%20%E2%9A%A1`
-    const canOpen = await Linking.canOpenURL(whatsappUrl)
-    if (canOpen) {
-      track('share_card_whatsapp')
-      // Share image file via expo-sharing first (WhatsApp picks it up)
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share to WhatsApp' })
-      } else {
-        await Linking.openURL(whatsappUrl)
-      }
-    } else {
-      Alert.alert('WhatsApp not found', 'Share using another app?', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Share', onPress: () => shareNative() },
-      ])
-    }
-  }
-
-  async function shareNative() {
-    const uri = capturedUri ?? await captureCard()
-    if (!uri) return
-    track('share_card_native')
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share your Surge log' })
-    }
-  }
-
-  async function saveToGallery() {
-    const uri = capturedUri ?? await captureCard()
-    if (!uri) return
-    const { status } = await MediaLibrary.requestPermissionsAsync()
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow access to save the card to your gallery.')
+  async function handleShare(pdf: GeneratedPDF, index: number) {
+    const available = await Sharing.isAvailableAsync()
+    if (!available) {
+      Alert.alert('Sharing not available on this device.')
       return
     }
-    track('share_card_saved')
-    await MediaLibrary.saveToLibraryAsync(uri)
-    Alert.alert('Saved!', 'Card saved to your gallery.')
+    setSharingIndex(index)
+    try {
+      await Sharing.shareAsync(pdf.uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: `Surge Report — ${pdf.displayDate}`,
+        UTI: 'com.adobe.pdf',
+      })
+      track('pdf_report_shared', { range: rangeKey })
+    } finally {
+      setSharingIndex(null)
+    }
   }
 
   // ---------------------------------------------------------------------------
-  // Save schedule preference to Supabase
+  // Send test report now
+  // ---------------------------------------------------------------------------
+  async function handleSendTestNow() {
+    if (!schedPhone.trim()) { Alert.alert('Enter a phone number first'); return }
+    setSendingTest(true)
+    try {
+      const { error } = await supabase.functions.invoke('schedule-reports', {
+        body: { testPhone: schedPhone.trim(), testUserId: profile?.id },
+      })
+      if (error) throw error
+      Alert.alert('Sent!', `Test report sent to ${schedPhone.trim()} via WhatsApp.`)
+      track('whatsapp_test_sent', {})
+    } catch (err: any) {
+      Alert.alert('Send failed', err.message ?? 'Please try again.')
+    } finally {
+      setSendingTest(false)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Save schedule
   // ---------------------------------------------------------------------------
   async function saveSchedule() {
     if (!profile) return
     if (scheduleEnabled && !schedPhone.trim()) {
-      Alert.alert('Enter a phone number', 'Add the WhatsApp number to send the report to.')
+      Alert.alert('Enter a phone number')
       return
     }
     setSavingSchedule(true)
@@ -170,7 +182,7 @@ export default function ShareScreen() {
         : 'Scheduled reports turned off.'
       )
     } catch {
-      Alert.alert('Error', 'Could not save schedule. Please try again.')
+      Alert.alert('Error', 'Could not save. Please try again.')
     } finally {
       setSavingSchedule(false)
     }
@@ -181,42 +193,100 @@ export default function ShareScreen() {
   // ---------------------------------------------------------------------------
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
 
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>Share</Text>
+          <Text style={styles.title}>PDF Report</Text>
           <View style={{ width: 60 }} />
         </View>
 
-        {/* Card preview */}
-        <View style={styles.cardWrapper}>
-          <ViewShot
-            ref={viewShotRef}
-            options={{ format: 'png', quality: 1.0 }}
-            style={styles.viewShot}
-          >
-            <ShareCard data={cardData} />
-          </ViewShot>
-        </View>
+        {/* ── PDF Report section ── */}
+        <View style={styles.card}>
 
-        {/* One-time share buttons */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Share now</Text>
-          <View style={styles.shareRow}>
-            <ShareButton emoji="💬" label="WhatsApp" onPress={shareToWhatsApp} loading={capturing} />
-            <ShareButton emoji="📤" label="Share"    onPress={shareNative}    loading={capturing} />
-            <ShareButton emoji="💾" label="Save"     onPress={saveToGallery}  loading={capturing} />
+          {/* Date range */}
+          <Text style={styles.fieldLabel}>Date range</Text>
+          <View style={styles.chipRow}>
+            {RANGE_OPTIONS.map(opt => (
+              <TouchableOpacity
+                key={opt.key}
+                style={[styles.rangeChip, rangeKey === opt.key && styles.rangeChipActive]}
+                onPress={() => { setRangeKey(opt.key); setGeneratedPDFs([]) }}
+              >
+                <Text style={[styles.rangeChipText, rangeKey === opt.key && styles.rangeChipTextActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
+
+          {/* Receiver name */}
+          <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>
+            Report for (optional)
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={receiverName}
+            onChangeText={v => { setReceiverName(v); setGeneratedPDFs([]) }}
+            placeholder="e.g. Coach Rahul"
+            placeholderTextColor={Colors.text3}
+            autoCorrect={false}
+          />
+
+          {/* Generate button */}
+          <TouchableOpacity
+            style={[styles.generateBtn, generating && styles.btnDisabled]}
+            onPress={handleGenerate}
+            disabled={generating}
+            activeOpacity={0.85}
+          >
+            {generating
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.generateBtnText}>Generate PDF{rangeKey !== 'today' ? 's' : ''}</Text>
+            }
+          </TouchableOpacity>
+
+          {/* Generated PDFs list */}
+          {generatedPDFs.length > 0 && (
+            <View style={styles.pdfList}>
+              <Text style={styles.pdfListTitle}>
+                {generatedPDFs.length === 1 ? '1 PDF ready' : `${generatedPDFs.length} PDFs ready`}
+              </Text>
+              {generatedPDFs.map((pdf, i) => (
+                <View key={pdf.date} style={styles.pdfRow}>
+                  <View style={styles.pdfInfo}>
+                    <Text style={styles.pdfEmoji}>📄</Text>
+                    <Text style={styles.pdfDate}>{pdf.displayDate}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.shareBtn, sharingIndex === i && styles.btnDisabled]}
+                    onPress={() => handleShare(pdf, i)}
+                    disabled={sharingIndex !== null}
+                    activeOpacity={0.85}
+                  >
+                    {sharingIndex === i
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={styles.shareBtnText}>Share</Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* Scheduled report */}
-        <View style={styles.section}>
+        {/* ── Scheduled report section ── */}
+        <View style={styles.card}>
           <View style={styles.scheduleHeader}>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.sectionTitle}>Scheduled report</Text>
               <Text style={styles.scheduleSubtitle}>Auto-send to your trainer or accountability partner</Text>
             </View>
@@ -229,10 +299,10 @@ export default function ShareScreen() {
           </View>
 
           {scheduleEnabled && (
-            <View style={styles.scheduleForm}>
+            <>
               <Text style={styles.fieldLabel}>WhatsApp number</Text>
               <TextInput
-                style={styles.phoneInput}
+                style={styles.input}
                 value={schedPhone}
                 onChangeText={setSchedPhone}
                 placeholder="+91 98765 43210"
@@ -241,35 +311,48 @@ export default function ShareScreen() {
                 autoCorrect={false}
               />
 
-              <Text style={styles.fieldLabel}>Frequency</Text>
-              <View style={styles.freqRow}>
+              <Text style={[styles.fieldLabel, { marginTop: Spacing.sm }]}>Frequency</Text>
+              <View style={styles.chipRow}>
                 {(['daily', 'weekly'] as const).map(f => (
                   <TouchableOpacity
                     key={f}
-                    style={[styles.freqChip, schedFreq === f && styles.freqChipActive]}
+                    style={[styles.rangeChip, schedFreq === f && styles.rangeChipActive]}
                     onPress={() => setSchedFreq(f)}
                   >
-                    <Text style={[styles.freqChipText, schedFreq === f && styles.freqChipTextActive]}>
+                    <Text style={[styles.rangeChipText, schedFreq === f && styles.rangeChipTextActive]}>
                       {f === 'daily' ? 'Daily' : 'Weekly'}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
-
-              <TouchableOpacity style={styles.saveBtn} onPress={saveSchedule} disabled={savingSchedule}>
-                {savingSchedule
-                  ? <ActivityIndicator color="#fff" />
-                  : <Text style={styles.saveBtnText}>Save schedule</Text>
-                }
-              </TouchableOpacity>
-            </View>
+            </>
           )}
 
-          {!scheduleEnabled && (
-            <TouchableOpacity style={styles.saveBtn} onPress={saveSchedule} disabled={savingSchedule}>
-              {savingSchedule
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.saveBtnText}>Save</Text>
+          <TouchableOpacity
+            style={[styles.generateBtn, savingSchedule && styles.btnDisabled]}
+            onPress={saveSchedule}
+            disabled={savingSchedule}
+            activeOpacity={0.85}
+          >
+            {savingSchedule
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.generateBtnText}>
+                  {scheduleEnabled ? 'Save schedule' : 'Turn off schedule'}
+                </Text>
+            }
+          </TouchableOpacity>
+
+          {/* Test send — only show when a phone is set */}
+          {scheduleEnabled && schedPhone.trim().length > 0 && (
+            <TouchableOpacity
+              style={[styles.testBtn, sendingTest && styles.btnDisabled]}
+              onPress={handleSendTestNow}
+              disabled={sendingTest}
+              activeOpacity={0.85}
+            >
+              {sendingTest
+                ? <ActivityIndicator color={Colors.accent} size="small" />
+                : <Text style={styles.testBtnText}>Send test report now →</Text>
               }
             </TouchableOpacity>
           )}
@@ -281,141 +364,122 @@ export default function ShareScreen() {
 }
 
 // ---------------------------------------------------------------------------
-// Share button component
-// ---------------------------------------------------------------------------
-function ShareButton({ emoji, label, onPress, loading }: { emoji: string; label: string; onPress: () => void; loading: boolean }) {
-  return (
-    <TouchableOpacity style={btnStyles.btn} onPress={onPress} disabled={loading}>
-      {loading
-        ? <ActivityIndicator color={Colors.accent} />
-        : <Text style={btnStyles.emoji}>{emoji}</Text>
-      }
-      <Text style={btnStyles.label}>{label}</Text>
-    </TouchableOpacity>
-  )
-}
-
-const btnStyles = StyleSheet.create({
-  btn: {
-    flex:           1,
-    backgroundColor: Colors.surface,
-    borderRadius:    Radius.md,
-    borderWidth:     1,
-    borderColor:     Colors.border,
-    alignItems:      'center',
-    paddingVertical: Spacing.md,
-    gap:             4,
-  },
-  emoji: { fontSize: 22 },
-  label: { fontSize: FontSize.xs, color: Colors.text2, fontWeight: FontWeight.semibold },
-})
-
-// ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: Colors.bg },
-  scroll: { flex: 1 },
-  content: {
-    padding:       Spacing.md,
-    paddingBottom: Spacing.xxl,
-    gap:           Spacing.lg,
-  },
+  safe:    { flex: 1, backgroundColor: Colors.bg },
+  scroll:  { flex: 1 },
+  content: { padding: Spacing.md, paddingBottom: BOTTOM_SAFE_PADDING, gap: Spacing.md },
+
   header: {
     flexDirection:  'row',
     alignItems:     'center',
     justifyContent: 'space-between',
+    marginBottom:   Spacing.xs,
   },
   backBtn:  { padding: Spacing.sm },
   backText: { fontSize: FontSize.base, color: Colors.accent, fontWeight: FontWeight.semibold },
   title:    { fontSize: FontSize.lg, color: Colors.text1, fontWeight: FontWeight.bold },
 
-  cardWrapper: {
-    alignItems:    'center',
-    paddingVertical: Spacing.md,
-  },
-  viewShot: {
-    borderRadius: Radius.lg,
-    overflow:     'hidden',
-    shadowColor:  Colors.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius:  20,
-    elevation:     8,
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    padding:         Spacing.md,
+    gap:             Spacing.sm,
   },
 
-  section: {
-    gap: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize:   FontSize.md,
-    color:      Colors.text1,
-    fontWeight: FontWeight.bold,
-  },
-  shareRow: {
-    flexDirection: 'row',
-    gap:           Spacing.sm,
+  sectionTitle: { fontSize: FontSize.md, color: Colors.text1, fontWeight: FontWeight.bold },
+  fieldLabel: {
+    fontSize:      FontSize.xs,
+    color:         Colors.text2,
+    fontWeight:    FontWeight.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 
-  // Schedule
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  rangeChip: {
+    borderRadius:      Radius.full,
+    borderWidth:       1,
+    borderColor:       Colors.border,
+    paddingHorizontal: Spacing.md,
+    paddingVertical:   8,
+    backgroundColor:   Colors.bg,
+  },
+  rangeChipActive:     { borderColor: Colors.accent, backgroundColor: Colors.accentSoft },
+  rangeChipText:       { fontSize: FontSize.sm, color: Colors.text2, fontWeight: FontWeight.medium },
+  rangeChipTextActive: { color: Colors.accent, fontWeight: FontWeight.semibold },
+
+  input: {
+    backgroundColor:   Colors.bg,
+    borderRadius:      Radius.md,
+    borderWidth:       1,
+    borderColor:       Colors.border,
+    height:            48,
+    paddingHorizontal: Spacing.md,
+    fontSize:          FontSize.base,
+    color:             Colors.text1,
+  },
+
+  generateBtn: {
+    backgroundColor: Colors.accent,
+    borderRadius:    Radius.md,
+    height:          48,
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginTop:       Spacing.xs,
+  },
+  generateBtnText: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: '#fff' },
+  btnDisabled:     { opacity: 0.6 },
+
+  pdfList: {
+    marginTop:       Spacing.xs,
+    gap:             Spacing.sm,
+    borderTopWidth:  1,
+    borderTopColor:  Colors.border,
+    paddingTop:      Spacing.md,
+  },
+  pdfListTitle: { fontSize: FontSize.sm, color: Colors.text2, fontWeight: FontWeight.semibold },
+  pdfRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.bg,
+    borderRadius:    Radius.md,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    paddingHorizontal: Spacing.md,
+    paddingVertical:   Spacing.sm,
+  },
+  pdfInfo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  pdfEmoji: { fontSize: 18 },
+  pdfDate:  { fontSize: FontSize.sm, color: Colors.text1, fontWeight: FontWeight.medium },
+  shareBtn: {
+    backgroundColor:   Colors.accent,
+    borderRadius:      Radius.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical:   6,
+    minWidth:          64,
+    alignItems:        'center',
+  },
+  shareBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: '#fff' },
+
+  testBtn: {
+    alignItems:  'center',
+    paddingVertical: Spacing.sm,
+    borderRadius:    Radius.md,
+    borderWidth:     1,
+    borderColor:     Colors.accent,
+  },
+  testBtnText: { fontSize: FontSize.sm, color: Colors.accent, fontWeight: FontWeight.semibold },
+
   scheduleHeader: {
     flexDirection:  'row',
     alignItems:     'flex-start',
     justifyContent: 'space-between',
     gap:            Spacing.md,
   },
-  scheduleSubtitle: {
-    fontSize:  FontSize.sm,
-    color:     Colors.text2,
-    marginTop: 2,
-  },
-  scheduleForm: {
-    backgroundColor: Colors.surface,
-    borderRadius:    Radius.lg,
-    borderWidth:     1,
-    borderColor:     Colors.border,
-    padding:         Spacing.md,
-    gap:             Spacing.md,
-  },
-  fieldLabel: {
-    fontSize:   FontSize.sm,
-    color:      Colors.text2,
-    fontWeight: FontWeight.semibold,
-  },
-  phoneInput: {
-    backgroundColor:   Colors.bg,
-    borderRadius:      Radius.md,
-    borderWidth:       1,
-    borderColor:       Colors.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical:   Spacing.sm,
-    color:             Colors.text1,
-    fontSize:          FontSize.base,
-  },
-  freqRow: {
-    flexDirection: 'row',
-    flexWrap:      'wrap',
-    gap:           Spacing.sm,
-  },
-  freqChip: {
-    borderRadius:    Radius.full,
-    borderWidth:     1,
-    borderColor:     Colors.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical:   Spacing.xs,
-  },
-  freqChipActive: {
-    backgroundColor: Colors.accentSoft,
-    borderColor:     Colors.accent,
-  },
-  freqChipText:       { fontSize: FontSize.sm, color: Colors.text2 },
-  freqChipTextActive: { color: Colors.accent, fontWeight: FontWeight.semibold },
-
-  saveBtn: {
-    backgroundColor: Colors.accent,
-    borderRadius:    Radius.md,
-    paddingVertical: Spacing.md,
-    alignItems:      'center',
-  },
-  saveBtnText: { fontSize: FontSize.base, color: '#fff', fontWeight: FontWeight.bold },
+  scheduleSubtitle: { fontSize: FontSize.xs, color: Colors.text2, marginTop: 2 },
 })

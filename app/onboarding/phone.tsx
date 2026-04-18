@@ -14,6 +14,8 @@ import {
   Platform,
   Animated,
   Dimensions,
+  Modal,
+  FlatList,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
@@ -25,6 +27,22 @@ const CARD_HEIGHT = SCREEN_H * 0.52
 
 type Mode = 'landing' | 'phone'
 
+const COUNTRIES = [
+  { flag: '🇮🇳', name: 'India',          code: '+91',  maxLen: 10 },
+  { flag: '🇺🇸', name: 'United States',  code: '+1',   maxLen: 10 },
+  { flag: '🇬🇧', name: 'United Kingdom', code: '+44',  maxLen: 10 },
+  { flag: '🇦🇪', name: 'UAE',            code: '+971', maxLen: 9  },
+  { flag: '🇸🇬', name: 'Singapore',      code: '+65',  maxLen: 8  },
+  { flag: '🇦🇺', name: 'Australia',      code: '+61',  maxLen: 9  },
+  { flag: '🇨🇦', name: 'Canada',         code: '+1',   maxLen: 10 },
+  { flag: '🇩🇪', name: 'Germany',        code: '+49',  maxLen: 11 },
+  { flag: '🇫🇷', name: 'France',         code: '+33',  maxLen: 9  },
+  { flag: '🇳🇱', name: 'Netherlands',    code: '+31',  maxLen: 9  },
+  { flag: '🇿🇦', name: 'South Africa',   code: '+27',  maxLen: 9  },
+  { flag: '🇳🇿', name: 'New Zealand',    code: '+64',  maxLen: 9  },
+]
+type Country = typeof COUNTRIES[number]
+
 const CVP_ITEMS = [
   { icon: '🎤', line1: '"Bench press 4x8 at 80kg"', line2: 'Logged in 3 seconds.' },
   { icon: '🥗', line1: '"Had dal rice for lunch"',   line2: 'Macros tracked instantly.' },
@@ -33,10 +51,12 @@ const CVP_ITEMS = [
 
 export default function WelcomeScreen() {
   const navigation = useNavigation<any>()
-  const [mode,     setMode]    = useState<Mode>('landing')
-  const [phone,    setPhone]   = useState('')
-  const [loading,  setLoading] = useState(false)
-  const [cvpIndex, setCvpIndex] = useState(0)
+  const [mode,        setMode]       = useState<Mode>('landing')
+  const [phone,       setPhone]      = useState('')
+  const [loading,     setLoading]    = useState(false)
+  const [cvpIndex,    setCvpIndex]   = useState(0)
+  const [country,     setCountry]    = useState<Country>(COUNTRIES[0])  // India default
+  const [showPicker,  setShowPicker] = useState(false)
 
   // Orb breathe animation
   const orbScale   = useRef(new Animated.Value(1)).current
@@ -146,12 +166,12 @@ export default function WelcomeScreen() {
   // Phone OTP
   // ---------------------------------------------------------------------------
   async function handleSendOTP() {
-    const cleaned = phone.replace(/\s/g, '')
-    if (!cleaned || cleaned.length < 10) {
-      Alert.alert('Enter your phone number', 'Please enter a valid mobile number.')
+    const cleaned = phone.replace(/\D/g, '')
+    if (!cleaned || cleaned.length < 6) {
+      Alert.alert('Enter your phone number')
       return
     }
-    const formatted = cleaned.startsWith('+') ? cleaned : `+91${cleaned}`
+    const formatted = `${country.code}${cleaned}`
     setLoading(true)
     try {
       const { error } = await sendOTP(formatted)
@@ -242,9 +262,10 @@ export default function WelcomeScreen() {
             <>
               <Text style={styles.phoneLabel}>Enter your mobile number</Text>
               <View style={styles.phoneInputRow}>
-                <View style={styles.countryCode}>
-                  <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
-                </View>
+                <TouchableOpacity style={styles.countryChip} onPress={() => setShowPicker(true)} activeOpacity={0.75}>
+                  <Text style={styles.countryChipText}>{country.flag} {country.code}</Text>
+                  <Text style={styles.countryChipArrow}>▾</Text>
+                </TouchableOpacity>
                 <TextInput
                   style={styles.phoneInput}
                   value={phone}
@@ -252,7 +273,7 @@ export default function WelcomeScreen() {
                   placeholder="98765 43210"
                   placeholderTextColor={Colors.text3}
                   keyboardType="phone-pad"
-                  maxLength={10}
+                  maxLength={country.maxLen}
                   autoFocus
                 />
               </View>
@@ -281,6 +302,30 @@ export default function WelcomeScreen() {
         </Animated.View>
 
       </KeyboardAvoidingView>
+
+      {/* Country picker modal */}
+      <Modal visible={showPicker} animationType="slide" transparent onRequestClose={() => setShowPicker(false)}>
+        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
+          <View style={styles.pickerSheet}>
+            <Text style={styles.pickerTitle}>Select country</Text>
+            <FlatList
+              data={COUNTRIES}
+              keyExtractor={item => item.code + item.name}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.pickerRow, item.name === country.name && styles.pickerRowSelected]}
+                  onPress={() => { setCountry(item); setPhone(''); setShowPicker(false) }}
+                >
+                  <Text style={styles.pickerFlag}>{item.flag}</Text>
+                  <Text style={styles.pickerName}>{item.name}</Text>
+                  <Text style={styles.pickerCode}>{item.code}</Text>
+                  {item.name === country.name && <Text style={styles.pickerCheck}>✓</Text>}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -478,19 +523,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap:           Spacing.sm,
   },
-  countryCode: {
+  countryChip: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    gap:               4,
     backgroundColor:   Colors.surface,
     borderRadius:      Radius.md,
     borderWidth:       1,
     borderColor:       Colors.border,
-    paddingHorizontal: Spacing.md,
-    justifyContent:    'center',
+    paddingHorizontal: Spacing.sm,
     height:            56,
   },
-  countryCodeText: {
+  countryChipText: {
     fontSize:   FontSize.base,
     color:      Colors.text1,
     fontWeight: FontWeight.semibold,
+  },
+  countryChipArrow: {
+    fontSize: 10,
+    color:    Colors.text3,
+    marginTop: 2,
   },
   phoneInput: {
     flex:              1,
@@ -503,6 +555,43 @@ const styles = StyleSheet.create({
     fontSize:          FontSize.lg,
     height:            56,
   },
+
+  // Country picker modal
+  pickerOverlay: {
+    flex:            1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent:  'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius:  20,
+    borderTopRightRadius: 20,
+    paddingTop:      Spacing.md,
+    paddingBottom:   Spacing.xxl,
+    maxHeight:       '60%',
+  },
+  pickerTitle: {
+    fontSize:     FontSize.md,
+    fontWeight:   FontWeight.bold,
+    color:        Colors.text1,
+    textAlign:    'center',
+    paddingBottom: Spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    marginBottom:  Spacing.xs,
+  },
+  pickerRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical:   Spacing.md,
+    gap:               Spacing.md,
+  },
+  pickerRowSelected: { backgroundColor: Colors.accentSoft },
+  pickerFlag: { fontSize: 24 },
+  pickerName: { flex: 1, fontSize: FontSize.base, color: Colors.text1, fontWeight: FontWeight.medium },
+  pickerCode: { fontSize: FontSize.base, color: Colors.text2 },
+  pickerCheck: { fontSize: FontSize.base, color: Colors.accent, fontWeight: FontWeight.bold },
   sendOTPBtn: {
     backgroundColor: Colors.accent,
     borderRadius:    Radius.full,
