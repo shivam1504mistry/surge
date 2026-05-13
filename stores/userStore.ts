@@ -5,8 +5,9 @@ import { Goal, Sex } from '../constants/macros'
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-export type UnitPref = 'kg' | 'lbs'
-export type Tier     = 'free' | 'pro'
+export type UnitPref      = 'kg' | 'lbs'
+export type FoodUnitPref  = 'metric' | 'imperial' | 'natural'
+export type Tier          = 'free' | 'pro'
 
 export interface UserProfile {
   id:                   string
@@ -20,6 +21,7 @@ export interface UserProfile {
   body_fat_pct?:        number
   goal:                 Goal
   unit_pref:            UnitPref
+  food_unit_pref?:      FoodUnitPref
   calorie_target:       number
   protein_target_g:     number
   carbs_target_g:       number

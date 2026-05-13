@@ -21,11 +21,12 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../constants/theme'
 import { useVoiceLog } from '../hooks/useVoiceLog'
 import { track } from '../lib/analytics'
 import { submitAIFeedback } from '../lib/supabase'
+import FoodConfirmModal, { ConfirmDish, dishesToParsedFoods } from './FoodConfirmModal'
 
 // Set to false once parse-voice edge function is deployed and OPENAI_API_KEY is set
 const DEV_USE_STUBS = false
@@ -34,8 +35,12 @@ const DEV_USE_STUBS = false
 // Types
 // ---------------------------------------------------------------------------
 interface ParsedSet {
-  weight: number
-  reps:   number
+  weight:                 number
+  reps:                   number
+  distance_km?:           number
+  distance_original?:     number
+  distance_original_unit?: string
+  duration_min?:          number
 }
 export interface ParsedExercise {
   name:   string
@@ -51,6 +56,13 @@ export interface ParsedFood {
   serving_size: number
   serving_unit: string
   meal_slot:   'breakfast' | 'lunch' | 'dinner' | 'snacks'
+  ai_estimated?: boolean
+  ingredients?: Array<{
+    name:         string
+    qty:          number
+    unit:         string
+    unit_options: string[]
+  }>
 }
 
 type StubSession =
@@ -132,6 +144,7 @@ const FEEDBACK_REASONS = {
 }
 
 export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSaveFood }: Props) {
+  const insets = useSafeAreaInsets()
   const [phase, setPhase]           = useState<'listening' | 'confirming'>('listening')
   const [transcript, setTranscript] = useState('')
   const [hintPhase, setHintPhase]   = useState(true)
@@ -140,11 +153,16 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
   const [permDenied, setPermDenied] = useState(false)
   const stubIndex = useRef(0)
 
+  // Food confirm modal state
+  const [showFoodConfirm,    setShowFoodConfirm]    = useState(false)
+  const [foodConfirmDishes,  setFoodConfirmDishes]  = useState<ConfirmDish[]>([])
+  const [resultHasExercises, setResultHasExercises] = useState(false)
+
   // Feedback state
   const [feedbackOpen,      setFeedbackOpen]      = useState(false)
   const [feedbackSubmitted, setFeedbackSubmitted] = useState(false)
 
-  const { isRecording, isParsing, error: voiceError, startRecording, stopAndParse, cancelRecording } = useVoiceLog()
+  const { isParsing, error: voiceError, startRecording, stopAndParse, cancelRecording } = useVoiceLog()
 
   // ------ Animations ------
   const micScale  = useRef(new Animated.Value(1)).current
@@ -224,6 +242,9 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
       setHintPhase(true)
       setParsedExercises([])
       setParsedFoods([])
+      setShowFoodConfirm(false)
+      setFoodConfirmDishes([])
+      setResultHasExercises(false)
       setFeedbackOpen(false)
       setFeedbackSubmitted(false)
       setPermDenied(false)
@@ -236,6 +257,32 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
     startListening()
   }, [visible])
 
+  function foodsToDishes(foods: ParsedFood[]): ConfirmDish[] {
+    return foods.map(f => {
+      const ings = (f.ingredients ?? []).map(ing => ({
+        name:        ing.name,
+        qty:         ing.qty,
+        unit:        ing.unit,
+        unitOptions: ing.unit_options ?? [ing.unit, 'g', 'ml', 'piece'],
+        calories:    (ing as any).calories   ?? 0,
+        protein_g:   (ing as any).protein_g  ?? 0,
+        carbs_g:     (ing as any).carbs_g    ?? 0,
+        fat_g:       (ing as any).fat_g      ?? 0,
+      }))
+      // Always derive dish totals from ingredients so they always match
+      const hasIngMacros = ings.some(i => i.calories > 0)
+      const totals = hasIngMacros
+        ? ings.reduce((acc, i) => ({
+            calories:  acc.calories  + i.calories,
+            protein_g: acc.protein_g + i.protein_g,
+            carbs_g:   acc.carbs_g   + i.carbs_g,
+            fat_g:     acc.fat_g     + i.fat_g,
+          }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 })
+        : { calories: f.calories, protein_g: f.protein_g, carbs_g: f.carbs_g, fat_g: f.fat_g }
+      return { name: f.name, ingredients: ings, ...totals }
+    })
+  }
+
   async function handleDoneTalking() {
     clearTimers()
     stopAnimations()
@@ -245,10 +292,14 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
       stubIndex.current++
       if (stub.type === 'workout') {
         setParsedExercises(prev => [...prev, ...stub.exercises])
+        setResultHasExercises(true)
+        setPhase('confirming')
       } else {
         setParsedFoods(prev => [...prev, ...stub.foods])
+        setFoodConfirmDishes(foodsToDishes(stub.foods))
+        setShowFoodConfirm(true)
+        // stay on listening phase — FoodConfirmModal covers the screen
       }
-      setPhase('confirming')
       return
     }
 
@@ -260,13 +311,25 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
     }
 
     setTranscript(result.transcript)
-    if (result.type === 'workout' || result.type === 'both') {
+
+    const hasExercises = (result.type === 'workout' || result.type === 'both') && (result.exercises?.length ?? 0) > 0
+    const hasFoods     = (result.type === 'food'    || result.type === 'both') && (result.foods?.length ?? 0) > 0
+
+    if (hasExercises) {
       setParsedExercises(prev => [...prev, ...(result.exercises ?? [])])
+      setResultHasExercises(true)
     }
-    if (result.type === 'food' || result.type === 'both') {
-      setParsedFoods(prev => [...prev, ...(result.foods ?? [])])
+    if (hasFoods) {
+      const rawFoods = (result.foods ?? []) as ParsedFood[]
+      setParsedFoods(prev => [...prev, ...rawFoods])
+      setFoodConfirmDishes(foodsToDishes(rawFoods))
+      setShowFoodConfirm(true)
     }
-    setPhase('confirming')
+
+    // Show exercise confirming phase; if food-only, FoodConfirmModal covers the screen
+    if (hasExercises) {
+      setPhase('confirming')
+    }
   }
 
   function handleSayMore() {
@@ -281,7 +344,7 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
                     : parsedExercises.length > 0 ? 'workout' : 'food',
     })
     if (parsedExercises.length > 0) onSave?.(parsedExercises)
-    if (parsedFoods.length > 0)     onSaveFood?.(parsedFoods)
+    // Food is saved via FoodConfirmModal — not here
     onClose()
   }
 
@@ -306,7 +369,7 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
   if (permDenied) {
     return (
       <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={[styles.screen, { paddingTop: insets.top + 8 }]} edges={['bottom']}>
           <View style={styles.micArea}>
             <View style={[styles.micCircle, { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border }]}>
               <Text style={styles.micIcon}>🎤</Text>
@@ -342,7 +405,7 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
   if (phase === 'listening') {
     return (
       <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-        <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+        <SafeAreaView style={[styles.screen, { paddingTop: insets.top + 8 }]} edges={['bottom']}>
 
           <Text style={styles.listeningLabel}>LISTENING...</Text>
 
@@ -417,6 +480,21 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
           </TouchableOpacity>
 
         </SafeAreaView>
+
+        <FoodConfirmModal
+          visible={showFoodConfirm}
+          dishes={foodConfirmDishes}
+          transcript={transcript}
+          onSave={(dishes) => {
+            onSaveFood?.(dishesToParsedFoods(dishes))
+            setShowFoodConfirm(false)
+            onClose()
+          }}
+          onClose={() => {
+            setShowFoodConfirm(false)
+            onClose()
+          }}
+        />
       </Modal>
     )
   }
@@ -426,7 +504,7 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
   // ---------------------------------------------------------------------------
   return (
     <Modal visible animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.screen, { paddingTop: insets.top + 8 }]} edges={['bottom']}>
         <ScrollView
           style={{ flex: 1, width: '100%' }}
           contentContainerStyle={styles.confirmContent}
@@ -450,6 +528,14 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
               <Text style={styles.feedbackThanks}>✓ Noted</Text>
             )}
           </View>
+
+          {/* Transcript pill — shows what was heard in user's original language */}
+          {!!transcript && (
+            <View style={styles.transcriptPill}>
+              <Text style={styles.transcriptIcon}>🎤</Text>
+              <Text style={styles.transcriptText} numberOfLines={2}>{transcript}</Text>
+            </View>
+          )}
 
           {/* Feedback reason chips */}
           {feedbackOpen && !feedbackSubmitted && (
@@ -480,37 +566,27 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
                   <Text style={styles.muscleChipText}>{ex.muscle}</Text>
                 </View>
               </View>
-              {ex.sets.map((s, si) => (
-                <View key={si} style={[styles.setRow, si === 0 && { marginTop: Spacing.sm }]}>
-                  <Text style={styles.setLabel}>S{si + 1}</Text>
-                  <Text style={styles.setText}>{s.weight} kg × {s.reps} reps</Text>
-                  <Text style={styles.setCheck}>✓</Text>
-                </View>
-              ))}
+              {ex.sets.map((s: any, si: number) => {
+                let summary = ''
+                if (s.distance_km) {
+                  // Show in original unit if available (e.g. "3.5 miles"), else km
+                  summary = s.distance_original != null && s.distance_original_unit
+                    ? `${s.distance_original} ${s.distance_original_unit}`
+                    : `${s.distance_km} km`
+                }
+                else if (s.duration_min) summary = `${s.duration_min} min`
+                else if (s.weight > 0) summary = `${s.weight} kg × ${s.reps} reps`
+                else summary = `${s.reps} reps`
+                return (
+                  <View key={si} style={[styles.setRow, si === 0 && { marginTop: Spacing.sm }]}>
+                    <Text style={styles.setLabel}>S{si + 1}</Text>
+                    <Text style={styles.setText}>{summary}</Text>
+                    <Text style={styles.setCheck}>✓</Text>
+                  </View>
+                )
+              })}
             </View>
           ))}
-
-          {/* Parsed food */}
-          {parsedFoods.map((food, fi) => (
-            <View key={`food-${food.name}-${fi}`} style={styles.exerciseCard}>
-              <View style={styles.exerciseChipRow}>
-                <View style={styles.exerciseNameChip}>
-                  <Text style={styles.exerciseNameChipText}>🥗 {food.name}</Text>
-                </View>
-                <View style={styles.muscleChip}>
-                  <Text style={styles.muscleChipText}>{food.meal_slot}</Text>
-                </View>
-              </View>
-              <View style={[styles.setRow, { marginTop: Spacing.sm }]}>
-                <Text style={[styles.setText, { flex: 0, marginRight: Spacing.md }]}>{food.calories} kcal</Text>
-                <Text style={styles.macroText}>P {food.protein_g}g</Text>
-                <Text style={styles.macroText}>C {food.carbs_g}g</Text>
-                <Text style={styles.macroText}>F {food.fat_g}g</Text>
-                <Text style={styles.setCheck}>✓</Text>
-              </View>
-            </View>
-          ))}
-
 
           {/* Or say more */}
           <TouchableOpacity style={styles.sayMoreRow} onPress={handleSayMore} activeOpacity={0.7}>
@@ -528,6 +604,23 @@ export default function VoiceModal({ visible, onClose, onManualLog, onSave, onSa
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+
+      {/* Food confirmation — shown on top of exercises confirming phase (or covering listening phase for food-only) */}
+      <FoodConfirmModal
+        visible={showFoodConfirm}
+        dishes={foodConfirmDishes}
+        transcript={transcript}
+        onSave={(dishes) => {
+          onSaveFood?.(dishesToParsedFoods(dishes))
+          setShowFoodConfirm(false)
+          // If food-only (no exercises), close VoiceModal too
+          if (!resultHasExercises) onClose()
+        }}
+        onClose={() => {
+          setShowFoodConfirm(false)
+          if (!resultHasExercises) onClose()
+        }}
+      />
     </Modal>
   )
 }
@@ -548,7 +641,7 @@ const styles = StyleSheet.create({
 
   // ── Listening ──
   listeningLabel: {
-    marginTop:     Spacing.xxl,
+    marginTop:     Spacing.md,
     fontSize:      FontSize.sm,
     color:         Colors.text2,
     fontWeight:    FontWeight.bold,
@@ -879,6 +972,20 @@ const styles = StyleSheet.create({
     color:      Colors.text1,
     fontWeight: FontWeight.medium,
   },
+
+  transcriptPill: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             Spacing.sm,
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.md,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    padding:         Spacing.sm,
+    width:           '100%',
+  },
+  transcriptIcon: { fontSize: 14 },
+  transcriptText: { flex: 1, fontSize: FontSize.sm, color: Colors.text2, fontStyle: 'italic' },
 
   confirmBar: {
     flexDirection:   'row',

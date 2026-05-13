@@ -6,13 +6,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RouteProp } from '@react-navigation/native'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
 import { Goal, Sex } from '../../constants/macros'
+import { track } from '../../lib/analytics'
 
 type ProfileParams = {
   name: string; age: number; sex: Sex; weight_kg: number; height_cm: number
@@ -37,8 +38,11 @@ export default function GoalsScreen() {
 
   const [selected, setSelected] = useState<Goal | null>(null)
 
+  React.useEffect(() => { track('onboarding_goals_viewed') }, [])
+
   function handleNext() {
     if (!selected) return
+    track('onboarding_goals_selected', { goal: selected })
     navigation.navigate('Experience', { ...params, goal: selected })
   }
 

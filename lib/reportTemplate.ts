@@ -67,7 +67,8 @@ function bar(value: number, target: number, color: string): string {
   `
 }
 
-export function buildDayHTML(day: ReportDay, generatedAt: string): string {
+/** Builds the inner HTML for one day (no html/head/body shell) */
+function buildDayBody(day: ReportDay, generatedAt: string, isLast: boolean): string {
   const caloriesPct   = pct(day.calories,   day.calorie_target)
   const proteinPct    = pct(day.protein_g,  day.protein_target_g)
   const carbsPct      = pct(day.carbs_g,    day.carbs_target_g)
@@ -94,9 +95,14 @@ export function buildDayHTML(day: ReportDay, generatedAt: string): string {
   }).join('')
 
   const exercisesHTML = day.exercises.map(ex => {
-    const setsHTML = ex.sets.map(s => {
-      const pr = s.is_pr ? ` <span class="pr-chip">⚡ PR</span>` : ''
-      return `<span class="set-chip">${s.weight_kg}kg × ${s.reps}</span>${pr}`
+    const setsHTML = ex.sets.map((s: any) => {
+      const pr    = s.is_pr ? ` <span class="pr-chip">⚡ PR</span>` : ''
+      let label: string
+      if (s.distance_km)   label = `${s.distance_km} km`
+      else if (s.duration_min) label = `${s.duration_min} min`
+      else if (s.weight_kg > 0) label = `${s.weight_kg}kg × ${s.reps}`
+      else label = `${s.reps} reps`
+      return `<span class="set-chip">${label}</span>${pr}`
     }).join('')
     return `
       <div class="exercise">
@@ -172,85 +178,19 @@ export function buildDayHTML(day: ReportDay, generatedAt: string): string {
 
   const receiverRow = day.receiverName ? `
     <div class="receiver-row">
-      <span class="receiver-label">Report for</span>
-      <span class="receiver-name">${day.receiverName}</span>
+      <span class="receiver-label">REPORT FOR</span>
+      <span class="receiver-name">Coach ${day.receiverName}</span>
     </div>
   ` : ''
 
-  const footerLink = day.appLink ? `
-    <div class="footer-download">
-      <div class="footer-download-label">Try Surge free</div>
-      <div class="footer-download-link">${day.appLink}</div>
-    </div>
-  ` : ''
+  const pageBreak = isLast ? '' : '<div style="page-break-after:always;"></div>'
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Surge Report — ${day.date}</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; background: #fff; color: #1a1a1a; }
-.page { background: #fff; max-width: 480px; margin: 0 auto; }
-.header { background: #0D0D0D; padding: 24px 24px 20px; }
-.header-top { display: flex; align-items: center; justify-content: space-between; }
-.logo { display: flex; align-items: center; gap: 8px; }
-.logo-emoji { font-size: 22px; }
-.logo-text { font-size: 18px; font-weight: 900; color: #fff; letter-spacing: 3px; }
-.date-badge { background: rgba(255,77,0,0.15); border: 1px solid rgba(255,77,0,0.4); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #FF4D00; font-weight: 600; }
-.athlete-row { margin-top: 16px; display: flex; align-items: center; gap: 10px; }
-.athlete-avatar { width: 36px; height: 36px; border-radius: 18px; background: rgba(255,77,0,0.2); display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.athlete-name { font-size: 15px; font-weight: 700; color: #fff; }
-.athlete-goal { font-size: 12px; color: #888; margin-top: 1px; }
-.receiver-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; gap: 8px; }
-.receiver-label { font-size: 11px; color: #666; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; }
-.receiver-name { font-size: 13px; color: #FF4D00; font-weight: 700; }
-.section { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; }
-.section:last-of-type { border-bottom: none; }
-.section-title { font-size: 11px; font-weight: 700; color: #FF4D00; letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 14px; }
-.empty-state { font-size: 13px; color: #bbb; text-align: center; padding: 16px 0; }
-.macro-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 14px; }
-.macro-card { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 10px 6px; text-align: center; }
-.macro-value { font-size: 18px; font-weight: 800; line-height: 1; }
-.macro-unit { font-size: 10px; color: #aaa; margin-top: 2px; }
-.macro-label { font-size: 10px; color: #888; margin-top: 3px; font-weight: 600; }
-.c { color: #FF4D00; } .p { color: #00D26A; } .cb { color: #3B82F6; } .f { color: #F59E0B; }
-.bar-row { margin-bottom: 10px; }
-.bar-row:last-child { margin-bottom: 0; }
-.bar-meta { display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-bottom: 5px; font-weight: 500; }
-.bar-track { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 3px; }
-.meal { margin-bottom: 14px; }
-.meal:last-child { margin-bottom: 0; }
-.meal-slot { font-size: 11px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
-.food-item { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #f5f5f5; }
-.food-item:last-child { border-bottom: none; }
-.food-name { font-size: 13px; color: #222; font-weight: 500; }
-.food-serving { font-size: 11px; color: #aaa; margin-top: 1px; }
-.food-cals { font-size: 13px; font-weight: 700; color: #555; }
-.exercise { margin-bottom: 14px; }
-.exercise:last-child { margin-bottom: 0; }
-.exercise-name { font-size: 13px; font-weight: 700; color: #222; margin-bottom: 6px; }
-.sets-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.set-chip { background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 4px 8px; font-size: 11px; color: #555; font-weight: 600; }
-.pr-chip { background: rgba(255,77,0,0.08); border: 1px solid rgba(255,77,0,0.25); color: #FF4D00; font-size: 10px; font-weight: 700; border-radius: 6px; padding: 4px 8px; }
-.footer { background: #fafafa; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #eee; }
-.footer-brand { font-size: 11px; color: #bbb; font-weight: 600; letter-spacing: 1px; }
-.footer-brand span { color: #FF4D00; }
-.footer-note { font-size: 10px; color: #ccc; margin-top: 2px; }
-.footer-download { text-align: right; }
-.footer-download-label { font-size: 10px; color: #bbb; margin-bottom: 2px; }
-.footer-download-link { font-size: 11px; color: #FF4D00; font-weight: 700; }
-</style>
-</head>
-<body>
+  return `
 <div class="page">
   <div class="header">
     <div class="header-top">
       <div class="logo">
-        <span class="logo-emoji">⚡</span>
+        <span style="font-size:18px;margin-right:6px;">⚡</span>
         <span class="logo-text">SURGE</span>
       </div>
       <span class="date-badge">${day.date}</span>
@@ -259,23 +199,100 @@ body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; backgrou
       <div class="athlete-avatar">⚡</div>
       <div>
         <div class="athlete-name">${day.athleteName}</div>
-        <div class="athlete-goal">${day.athleteGoal} · ${day.weightKg} kg</div>
+        <div class="athlete-sub">${day.athleteGoal} · ${day.weightKg} kg</div>
       </div>
     </div>
-    ${receiverRow}
   </div>
 
+  ${receiverRow}
   ${nutritionSection}
   ${workoutSection}
 
   <div class="footer">
-    <div>
-      <div class="footer-brand">⚡ <span>SURGE</span></div>
-      <div class="footer-note">Generated ${generatedAt}</div>
+    <div class="footer-top">
+      <div>
+        <div class="footer-brand">⚡ SURGE</div>
+        <div class="footer-ts">Generated ${generatedAt}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="footer-dl-label">Track on Surge ⚡</div>
+      </div>
     </div>
-    ${footerLink}
   </div>
 </div>
+${pageBreak}
+`
+}
+
+const CSS = `
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; background: #fff; color: #1a1a1a; font-size: 14px; }
+.page { background: #fff; max-width: 480px; margin: 0 auto; }
+.header { background: #0D0D0D; padding: 20px 24px 20px; }
+.header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.logo { display: flex; align-items: center; gap: 8px; }
+.logo-text { font-size: 17px; font-weight: 900; color: #fff; letter-spacing: 3px; }
+.date-badge { background: rgba(255,77,0,0.18); border: 1px solid rgba(255,77,0,0.45); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: #FF4D00; font-weight: 700; white-space: nowrap; }
+.athlete-row { display: flex; align-items: center; gap: 10px; }
+.athlete-avatar { width: 34px; height: 34px; border-radius: 17px; background: rgba(255,77,0,0.2); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+.athlete-name { font-size: 15px; font-weight: 700; color: #fff; }
+.athlete-sub { font-size: 12px; color: #777; margin-top: 2px; }
+.receiver-row { padding: 11px 24px; background: #fff8f6; border-bottom: 1px solid #ffe5dc; display: flex; align-items: center; gap: 8px; }
+.receiver-label { font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; }
+.receiver-name { font-size: 13px; color: #FF4D00; font-weight: 700; }
+.section { padding: 16px 24px; border-bottom: 1px solid #f0f0f0; }
+.section-title { font-size: 10px; font-weight: 700; color: #FF4D00; letter-spacing: 1.4px; text-transform: uppercase; margin-bottom: 12px; }
+.empty-state { font-size: 13px; color: #aaa; font-style: italic; padding: 4px 0 2px; }
+.macro-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 12px; }
+.macro-card { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 10px 4px; text-align: center; }
+.macro-value { font-size: 17px; font-weight: 800; line-height: 1; }
+.macro-unit { font-size: 9px; color: #bbb; margin-top: 2px; }
+.macro-label { font-size: 9px; color: #888; margin-top: 3px; font-weight: 700; letter-spacing: 0.4px; }
+.c { color: #FF4D00; } .p { color: #00D26A; } .cb { color: #3B82F6; } .f { color: #F59E0B; }
+.bar-row { margin-bottom: 8px; }
+.bar-row:last-child { margin-bottom: 0; }
+.bar-meta { display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-bottom: 4px; font-weight: 500; }
+.bar-track { height: 5px; background: #eee; border-radius: 3px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; }
+.meal { margin-bottom: 12px; }
+.meal:last-child { margin-bottom: 0; }
+.meal-slot { font-size: 10px; font-weight: 700; color: #bbb; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; }
+.food-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f5f5f5; }
+.food-item:last-child { border-bottom: none; }
+.food-name { font-size: 13px; color: #222; font-weight: 500; }
+.food-serving { font-size: 11px; color: #bbb; margin-top: 1px; }
+.food-cals { font-size: 13px; font-weight: 700; color: #555; white-space: nowrap; margin-left: 8px; }
+.exercise { margin-bottom: 12px; }
+.exercise:last-child { margin-bottom: 0; }
+.exercise-name { font-size: 13px; font-weight: 700; color: #222; margin-bottom: 5px; }
+.sets-row { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+.set-chip { background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 3px 7px; font-size: 11px; color: #555; font-weight: 600; }
+.pr-chip { background: rgba(255,77,0,0.08); border: 1px solid rgba(255,77,0,0.25); color: #FF4D00; font-size: 10px; font-weight: 700; border-radius: 6px; padding: 3px 7px; }
+.footer { background: #fafafa; padding: 12px 24px; border-top: 2px solid #eee; }
+.footer-top { display: flex; align-items: center; justify-content: space-between; }
+.footer-brand { font-size: 12px; font-weight: 900; color: #FF4D00; letter-spacing: 2px; }
+.footer-ts { font-size: 10px; color: #bbb; margin-top: 3px; white-space: nowrap; }
+.footer-dl-label { font-size: 10px; color: #bbb; text-align: right; }
+`
+
+/** Build a single PDF HTML containing multiple days (one per page) */
+export function buildMultiDayHTML(days: ReportDay[], generatedAt: string): string {
+  const bodies = days.map((d, i) => buildDayBody(d, generatedAt, i === days.length - 1)).join('\n')
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Surge Report</title>
+<style>${CSS}</style>
+</head>
+<body>
+${bodies}
 </body>
 </html>`
+}
+
+/** Single-day PDF (delegates to buildMultiDayHTML for consistent CSS) */
+export function buildDayHTML(day: ReportDay, generatedAt: string): string {
+  return buildMultiDayHTML([day], generatedAt)
 }

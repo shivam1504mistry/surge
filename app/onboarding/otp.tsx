@@ -16,6 +16,8 @@ import { useNavigation, useRoute } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
 import { verifyOTP, sendOTP } from '../../lib/supabase'
+import { track } from '../../lib/analytics'
+import { useEffect } from 'react'
 
 export default function OTPScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>()
@@ -27,10 +29,21 @@ export default function OTPScreen() {
   const [resending, setResending] = useState(false)
   const inputs = useRef<(TextInput | null)[]>([])
 
+  useEffect(() => { track('onboarding_otp_viewed') }, [])
+
   const code = otp.join('')
 
   function handleChange(text: string, index: number) {
-    const digit = text.replace(/\D/g, '').slice(-1)
+    const digits = text.replace(/\D/g, '')
+    // Full OTP pasted / autofilled — distribute across all boxes
+    if (digits.length > 1) {
+      const next = [...otp]
+      digits.split('').slice(0, 6).forEach((d, i) => { next[i] = d })
+      setOtp(next)
+      inputs.current[Math.min(digits.length - 1, 5)]?.focus()
+      return
+    }
+    const digit = digits.slice(-1)
     const next  = [...otp]
     next[index] = digit
     setOtp(next)
@@ -54,6 +67,7 @@ export default function OTPScreen() {
     try {
       const { error } = await verifyOTP(phone, code)
       if (error) throw error
+      track('onboarding_otp_verified')
       navigation.replace('ProfileSetup')
     } catch (err: any) {
       Alert.alert('Invalid OTP', err.message ?? 'The code is incorrect or has expired. Please try again.')
@@ -104,7 +118,9 @@ export default function OTPScreen() {
                 onChangeText={text => handleChange(text, i)}
                 onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, i)}
                 keyboardType="number-pad"
-                maxLength={1}
+                maxLength={6}
+                textContentType="oneTimeCode"
+                autoComplete="sms-otp"
                 autoFocus={i === 0}
                 selectTextOnFocus
               />

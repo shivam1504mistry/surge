@@ -3,11 +3,62 @@ import { StatusBar } from "expo-status-bar";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Text, View, ScrollView, TouchableOpacity } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Text, View, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import { useSafeAreaInsets, SafeAreaProvider } from "react-native-safe-area-context";
+import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PostHogProvider } from "posthog-react-native";
+import { Feather } from "@expo/vector-icons";
 import { posthog, track, identify } from "./lib/analytics";
+import NetInfo from "@react-native-community/netinfo";
+
+// ---------------------------------------------------------------------------
+// Offline banner
+// ---------------------------------------------------------------------------
+function OfflineBanner() {
+  const [isOffline, setIsOffline] = React.useState(false)
+  const insets = useSafeAreaInsets()
+
+  useEffect(() => {
+    const unsub = NetInfo.addEventListener(state => {
+      setIsOffline(state.isConnected === false)
+    })
+    return unsub
+  }, [])
+
+  if (!isOffline) return null
+
+  return (
+    <View style={[offlineStyles.banner, { paddingTop: insets.top > 0 ? insets.top : 8 }]}>
+      <Feather name="wifi-off" size={13} color="#fff" />
+      <Text style={offlineStyles.text}>You're offline — changes will sync when reconnected</Text>
+    </View>
+  )
+}
+
+const offlineStyles = StyleSheet.create({
+  banner: {
+    position:        'absolute',
+    top:             0,
+    left:            0,
+    right:           0,
+    zIndex:          999,
+    backgroundColor: '#1A1A1A',
+    flexDirection:   'row',
+    alignItems:      'center',
+    justifyContent:  'center',
+    gap:             6,
+    paddingBottom:   8,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2E2E2E',
+  },
+  text: {
+    color:      '#A0A0A0',
+    fontSize:   11,
+    fontWeight: '500',
+  },
+})
 
 // ---------------------------------------------------------------------------
 // Error boundary — shows crash details on screen instead of blank crash
@@ -60,6 +111,7 @@ import OTPScreen from "./app/onboarding/otp";
 import ProfileSetupScreen from "./app/onboarding/profile-setup";
 import GoalsScreen from "./app/onboarding/goals";
 import ExperienceScreen from "./app/onboarding/experience";
+import FoodUnitsScreen from "./app/onboarding/food-units";
 import AccountabilityScreen from "./app/onboarding/accountability";
 
 // Main tab screens
@@ -74,104 +126,153 @@ const Tab = createBottomTabNavigator();
 const queryClient = new QueryClient();
 
 // ---------------------------------------------------------------------------
-// Tab icon
+// Floating island tab bar — Option C
 // ---------------------------------------------------------------------------
-function TabIcon({
-  emoji,
-  label,
-  focused,
-}: {
-  emoji: string;
-  label: string;
-  focused: boolean;
-}) {
-  return (
-    <View style={{ alignItems: "center", gap: 2 }}>
-      <Text style={{ fontSize: 22 }}>{emoji}</Text>
-      <Text
-        style={{
-          fontSize:       9,
-          fontWeight:     "600",
-          color:          focused ? Colors.accent : Colors.text3,
-          letterSpacing:  0.2,
-        }}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </View>
-  );
+const ROUTE_ICONS: Record<string, React.ComponentProps<typeof Feather>['name']> = {
+  History: 'calendar',
+  Profile: 'user',
 }
+
+function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets()
+
+  return (
+    <View
+      pointerEvents="box-none"
+      style={[
+        tab.wrapper,
+        {
+          bottom:         Math.max(insets.bottom, 16) + 8,
+          left:           20,
+          right:          20,
+        },
+      ]}
+    >
+      <View style={tab.pill}>
+        {state.routes.map((route, index) => {
+          const focused  = state.index === index
+          const isCenter = route.name === 'Today'
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type:             'tabPress',
+              target:           route.key,
+              canPreventDefault: true,
+            })
+            if (!focused && !event.defaultPrevented) {
+              navigation.navigate(route.name)
+            }
+          }
+
+          if (isCenter) {
+            return (
+              <TouchableOpacity
+                key={route.key}
+                onPress={onPress}
+                activeOpacity={0.85}
+                style={tab.centerWrap}
+              >
+                <View style={tab.centerBtn}>
+                  <Feather name="home" size={22} color="#fff" />
+                </View>
+              </TouchableOpacity>
+            )
+          }
+
+          const iconName = ROUTE_ICONS[route.name]
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={onPress}
+              activeOpacity={0.7}
+              style={tab.sideBtn}
+            >
+              <Feather
+                name={iconName}
+                size={21}
+                color={focused ? Colors.accent : Colors.text3}
+              />
+              <View style={[tab.dot, { opacity: focused ? 1 : 0 }]} />
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+const tab = StyleSheet.create({
+  wrapper: {
+    position:  'absolute',
+    alignItems: 'stretch',
+  },
+  pill: {
+    height:          54,
+    flexDirection:   'row',
+    alignItems:      'center',
+    backgroundColor: '#1A1A1A',
+    borderRadius:    27,
+    borderWidth:     1,
+    borderColor:     '#2E2E2E',
+    shadowColor:     '#000',
+    shadowOffset:    { width: 0, height: 8 },
+    shadowOpacity:   0.45,
+    shadowRadius:    20,
+    elevation:       14,
+    overflow:        'visible',
+  },
+  sideBtn: {
+    flex:           1,
+    alignItems:     'center',
+    justifyContent: 'center',
+    gap:            5,
+    paddingVertical: 6,
+  },
+  dot: {
+    width:        4,
+    height:       4,
+    borderRadius: 2,
+    backgroundColor: Colors.accent,
+  },
+  centerWrap: {
+    flex:           1,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  centerBtn: {
+    width:           46,
+    height:          46,
+    borderRadius:    23,
+    backgroundColor: Colors.accent,
+    alignItems:      'center',
+    justifyContent:  'center',
+    shadowColor:     Colors.accent,
+    shadowOffset:    { width: 0, height: 4 },
+    shadowOpacity:   0.55,
+    shadowRadius:    12,
+    elevation:       10,
+  },
+})
 
 // ---------------------------------------------------------------------------
 // Main tabs
 // ---------------------------------------------------------------------------
 function MainTabs() {
-  const insets = useSafeAreaInsets();
-  const TAB_CONTENT_HEIGHT = 58;
-  const tabBarHeight = TAB_CONTENT_HEIGHT + insets.bottom;
-
   return (
     <Tab.Navigator
       initialRouteName="Today"
       screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
-          borderTopWidth: 1,
-          height: tabBarHeight,
-          paddingBottom: insets.bottom,
-          paddingTop: 0,
-          overflow: 'visible',
-        },
+        headerShown:    false,
+        tabBarStyle:    { display: 'none' },  // hidden — FloatingTabBar renders instead
         tabBarShowLabel: false,
       }}
+      tabBar={(props) => <FloatingTabBar {...props} />}
     >
-      <Tab.Screen
-        name="History"
-        component={HistoryScreen}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="📋" label="Log" focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Today"
-        component={TodayScreen}
-        options={{
-          tabBarIcon: () => (
-            <View style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              backgroundColor: Colors.accent,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginTop: -20,
-              shadowColor: Colors.accent,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.5,
-              shadowRadius: 12,
-              elevation: 8,
-            }}>
-              <Text style={{ fontSize: 24 }}>🎤</Text>
-            </View>
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon emoji="👤" label="Me" focused={focused} />
-          ),
-        }}
-      />
+      <Tab.Screen name="History" component={HistoryScreen} />
+      <Tab.Screen name="Today"   component={TodayScreen}   />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
-  );
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +319,7 @@ function RootNavigator() {
         <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
         <Stack.Screen name="Goals" component={GoalsScreen} />
         <Stack.Screen name="Experience" component={ExperienceScreen} />
+        <Stack.Screen name="FoodUnits" component={FoodUnitsScreen} />
         <Stack.Screen name="Accountability" component={AccountabilityScreen} />
       </Stack.Navigator>
     );
@@ -234,6 +336,7 @@ function RootNavigator() {
         <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
         <Stack.Screen name="Goals" component={GoalsScreen} />
         <Stack.Screen name="Experience" component={ExperienceScreen} />
+        <Stack.Screen name="FoodUnits" component={FoodUnitsScreen} />
         <Stack.Screen name="Accountability" component={AccountabilityScreen} />
       </Stack.Navigator>
     );
@@ -260,11 +363,11 @@ export default function App() {
 
   useEffect(() => {
     track('app_open')
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
         identify(session.user.id, { email: session.user.email })
-        loadProfile(session.user.id)
+        await loadProfile(session.user.id)  // wait for profile before hiding splash
       }
       setLoading(false);
     });
@@ -305,14 +408,17 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <PostHogProvider client={posthog}>
-        <QueryClientProvider client={queryClient}>
-          <NavigationContainer>
-            <StatusBar style="light" />
-            <RootNavigator />
-          </NavigationContainer>
-        </QueryClientProvider>
-      </PostHogProvider>
+      <SafeAreaProvider>
+        <PostHogProvider client={posthog}>
+          <QueryClientProvider client={queryClient}>
+            <NavigationContainer>
+              <StatusBar style="light" />
+              <RootNavigator />
+              <OfflineBanner />
+            </NavigationContainer>
+          </QueryClientProvider>
+        </PostHogProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }

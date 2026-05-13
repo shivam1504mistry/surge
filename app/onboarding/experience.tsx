@@ -6,20 +6,21 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { RouteProp } from '@react-navigation/native'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
 import { Goal, Sex } from '../../constants/macros'
+import { track } from '../../lib/analytics'
 
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
 
 type BaseParams = { name: string; age: number; sex: Sex; weight_kg: number; height_cm: number; goal: Goal }
 type RootParamList = {
-  Experience:     BaseParams
-  Accountability: BaseParams & { experience: ExperienceLevel }
+  Experience: BaseParams
+  FoodUnits:  BaseParams & { experience: ExperienceLevel }
 }
 
 const LEVELS: { value: ExperienceLevel; label: string; desc: string; emoji: string }[] = [
@@ -44,15 +45,18 @@ const LEVELS: { value: ExperienceLevel; label: string; desc: string; emoji: stri
 ]
 
 export default function ExperienceScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<RootParamList>>()
+  const navigation = useNavigation<NativeStackNavigationProp<RootParamList, 'Experience'>>()
   const route      = useRoute<RouteProp<RootParamList, 'Experience'>>()
   const params     = route.params
 
   const [selected, setSelected] = useState<ExperienceLevel | null>(null)
 
+  React.useEffect(() => { track('onboarding_experience_viewed') }, [])
+
   function handleNext() {
     if (!selected) return
-    navigation.navigate('Accountability', { ...params, experience: selected })
+    track('onboarding_experience_selected', { level: selected })
+    navigation.navigate('FoodUnits', { ...params, experience: selected })
   }
 
   return (
@@ -60,7 +64,7 @@ export default function ExperienceScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.step}>3 of 4</Text>
+          <Text style={styles.step}>3 of 5</Text>
           <Text style={styles.title}>Training experience</Text>
           <Text style={styles.subtitle}>This helps us recommend sensible exercise defaults and volume.</Text>
         </View>

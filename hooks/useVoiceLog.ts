@@ -5,6 +5,7 @@ import { Alert, Linking, PermissionsAndroid, Platform } from 'react-native'
 // @ts-ignore — legacy import path for readAsStringAsync (new API doesn't support base64 on Android yet)
 import * as FileSystem from 'expo-file-system/legacy'
 import { supabase } from '../lib/supabase'
+import { useUserStore } from '../stores/userStore'
 import { ParsedExercise, ParsedFood } from '../components/VoiceModal'
 
 export type VoiceParseResult =
@@ -13,7 +14,8 @@ export type VoiceParseResult =
   | { type: 'both';    transcript: string; exercises: ParsedExercise[]; foods: ParsedFood[] }
 
 export function useVoiceLog() {
-  const recording  = useRef<Audio.Recording | null>(null)
+  const recording      = useRef<Audio.Recording | null>(null)
+  const foodUnitPref   = useUserStore((s) => s.profile?.food_unit_pref ?? 'metric')
   const [isRecording, setIsRecording] = useState(false)
   const [isParsing,   setIsParsing]   = useState(false)
   const [error,       setError]       = useState<string | null>(null)
@@ -61,6 +63,11 @@ export function useVoiceLog() {
         // NOT the broken EXPermissionsInterface, so it correctly shows the system dialog.
         const { granted, canAskAgain } = await Camera.requestMicrophonePermissionsAsync()
         console.log('[useVoiceLog] iOS mic permission via expo-camera — granted:', granted, 'canAskAgain:', canAskAgain)
+        if (granted) {
+          // Brief delay for iOS to fully activate the mic after first-time permission grant.
+          // Without this, Audio.Recording.createAsync can fail immediately after the dialog closes.
+          await new Promise(r => setTimeout(r, 400))
+        }
         if (!granted) {
           if (!canAskAgain) {
             Alert.alert(
@@ -145,7 +152,7 @@ export function useVoiceLog() {
           'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
           'apikey':        SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ audio: base64, mimeType: 'audio/m4a' }),
+        body: JSON.stringify({ audio: base64, mimeType: 'audio/m4a', food_unit_pref: foodUnitPref, localHour: new Date().getHours() }),
       })
 
       const data = await fnResponse.json()

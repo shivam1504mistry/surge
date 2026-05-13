@@ -21,6 +21,7 @@ import { useUserStore } from '../../stores/userStore'
 import { supabase } from '../../lib/supabase'
 import SupportButton from '../../components/SupportButton'
 import { Goal, Sex, calculateTargets } from '../../constants/macros'
+import { track } from '../../lib/analytics'
 
 const GOAL_LABELS: Record<Goal, string> = {
   fat_loss:    'Fat Loss',
@@ -65,7 +66,10 @@ export default function ProfileScreen() {
     setFatG(String(t.fat_g))
   }
 
+  React.useEffect(() => { track('screen_profile') }, [])
+
   function openEdit() {
+    track('profile_edit_tap')
     // Reset to current profile values
     setWeight(String(profile?.weight_kg   ?? ''))
     setGoal((profile?.goal as Goal)       ?? 'maintain')
@@ -159,6 +163,7 @@ export default function ProfileScreen() {
             onPress={() => Alert.alert('Sign out', 'Are you sure?', [
               { text: 'Cancel', style: 'cancel' },
               { text: 'Sign out', style: 'destructive', onPress: async () => {
+                track('profile_logout')
                 await supabase.auth.signOut()
                 useUserStore.getState().setSession(null)
                 useUserStore.getState().setProfile(null)

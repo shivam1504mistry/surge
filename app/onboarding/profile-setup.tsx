@@ -1,5 +1,5 @@
 // Agent 1 — Onboarding: Profile setup (name, age, sex, weight, height)
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   View,
   Text,
@@ -7,17 +7,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   Alert,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
 import { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
 import { Sex } from '../../constants/macros'
 import { supabase } from '../../lib/supabase'
 import { useUserStore } from '../../stores/userStore'
+import { track } from '../../lib/analytics'
 
 type RootParamList = {
   Goals: { name: string; age: number; sex: Sex; weight_kg: number; height_cm: number }
@@ -35,6 +36,8 @@ export default function ProfileSetupScreen() {
   const [heightIn, setHeightIn]   = useState('')
   const [unitKg, setUnitKg]       = useState(true)   // weight unit toggle
   const [unitCm, setUnitCm]       = useState(true)   // height unit toggle
+
+  useEffect(() => { track('onboarding_profile_viewed') }, [])
 
   function validate(): boolean {
     if (!name.trim())              { Alert.alert('Name required'); return false }
@@ -57,6 +60,7 @@ export default function ProfileSetupScreen() {
 
   function handleNext() {
     if (!validate()) return
+    track('onboarding_profile_next')
     const weight_kg = unitKg ? parseFloat(weight) : parseFloat(weight) * 0.453592
     let height_cm: number
     if (unitCm) {
@@ -79,7 +83,7 @@ export default function ProfileSetupScreen() {
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* Header */}

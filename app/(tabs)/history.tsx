@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Colors, FontSize, FontWeight, Radius, Spacing, BOTTOM_SAFE_PADDING } from '../../constants/theme'
 import { supabase } from '../../lib/supabase'
 import SupportButton from '../../components/SupportButton'
+import { track } from '../../lib/analytics'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,14 +75,24 @@ export default function HistoryScreen() {
       const { data: { user } } = await supabase.auth.getUser()
       const uid = user?.id
 
+      // workout_sets has no user_id — query sessions for this user first, then sets
+      const { data: sessions } = await supabase
+        .from('workout_sessions')
+        .select('id')
+        .eq('user_id', uid)
+        .gte('started_at', `${monthStart}T00:00:00`)
+        .lte('started_at', `${monthEnd}T23:59:59`)
+
+      const sessionIds = (sessions ?? []).map((s: { id: string }) => s.id)
+
       const [setsRes, foodRes] = await Promise.all([
-        supabase
-          .from('workout_sets')
-          .select('exercise_name, weight_kg, reps, set_number, logged_at')
-          .gte('logged_at', `${monthStart}T00:00:00.000Z`)
-          .lte('logged_at', `${monthEnd}T23:59:59.999Z`)
-          .eq('user_id', uid)
-          .order('logged_at', { ascending: true }),
+        sessionIds.length > 0
+          ? supabase
+              .from('workout_sets')
+              .select('exercise_name, weight_kg, reps, set_number, logged_at')
+              .in('session_id', sessionIds)
+              .order('logged_at', { ascending: true })
+          : Promise.resolve({ data: [] }),
         supabase
           .from('food_entries')
           .select('food_name, calories, protein_g, carbs_g, fat_g, meal_slot, logged_date')
@@ -131,15 +142,18 @@ export default function HistoryScreen() {
   }, [])
 
   useEffect(() => { loadMonth(year, month) }, [year, month])
+  useEffect(() => { track('screen_history') }, [])
 
   // ---------------------------------------------------------------------------
   // Navigation
   // ---------------------------------------------------------------------------
   function prevMonth() {
+    track('history_month_prev')
     if (month === 0) { setYear(y => y - 1); setMonth(11) }
     else setMonth(m => m - 1)
   }
   function nextMonth() {
+    track('history_month_next')
     if (month === 11) { setYear(y => y + 1); setMonth(0) }
     else setMonth(m => m + 1)
   }
@@ -220,7 +234,7 @@ export default function HistoryScreen() {
                       isSelected && styles.dayCellSelected,
                       isToday && !isSelected && styles.dayCellToday,
                     ]}
-                    onPress={() => !isFuture && setSelected(dateStr)}
+                    onPress={() => { if (!isFuture) { track('history_day_tap', { date: dateStr }); setSelected(dateStr) } }}
                     activeOpacity={isFuture ? 1 : 0.7}
                     disabled={isFuture}
                   >
@@ -304,7 +318,6 @@ export default function HistoryScreen() {
                 <View key={i} style={[styles.detailRow, i > 0 && styles.detailRowBorder]}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.detailRowName}>{food.food_name}</Text>
-                    <Text style={styles.detailRowMeta}>{food.meal_slot}</Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={styles.detailCalories}>{food.calories} kcal</Text>

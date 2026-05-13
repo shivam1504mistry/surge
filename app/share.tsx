@@ -16,8 +16,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Switch,
-  TextInput,
   Alert,
   ActivityIndicator,
 } from 'react-native'
@@ -30,10 +28,8 @@ import { supabase } from '../lib/supabase'
 import { track } from '../lib/analytics'
 import {
   generateReports,
-  GeneratedPDF,
   todayISO,
   daysAgoISO,
-  formatDisplayDate,
 } from '../lib/generateReport'
 
 // ---------------------------------------------------------------------------
@@ -63,40 +59,31 @@ export default function ShareScreen() {
   const { profile } = useUserStore()
 
   // ── PDF state ──
-  const [rangeKey,       setRangeKey]       = useState<RangeKey>('today')
-  const [receiverName,   setReceiverName]   = useState(profile?.accountability_name ?? '')
-  const [generating,     setGenerating]     = useState(false)
-  const [generatedPDFs,  setGeneratedPDFs]  = useState<GeneratedPDF[]>([])
-  const [sharingIndex,   setSharingIndex]   = useState<number | null>(null)
+  const [rangeKey,   setRangeKey]   = useState<RangeKey>('today')
+  const [generating, setGenerating] = useState(false)
 
-  // ── Schedule state ──
-  const [scheduleEnabled, setScheduleEnabled] = useState(
-    !!(profile?.accountability_phone && profile?.accountability_freq)
-  )
-  const [schedPhone,     setSchedPhone]     = useState(profile?.accountability_phone ?? '')
-  const [schedFreq,      setSchedFreq]      = useState<'daily' | 'weekly'>(
-    profile?.accountability_freq ?? 'weekly'
-  )
-  const [savingSchedule, setSavingSchedule] = useState(false)
-  const [sendingTest,    setSendingTest]    = useState(false)
+  React.useEffect(() => { track('screen_share') }, [])
+
 
   // ---------------------------------------------------------------------------
-  // Generate PDFs
+  // Generate + share immediately
   // ---------------------------------------------------------------------------
-  async function handleGenerate() {
+  async function handleShareReport() {
     if (!profile) return
-    const { data: { user } } = await supabase.auth.getUser()
+    const { session } = useUserStore.getState()
+    const user = session?.user
     if (!user) return
 
+    const available = await Sharing.isAvailableAsync()
+    if (!available) { Alert.alert('Sharing not available on this device.'); return }
+
     setGenerating(true)
-    setGeneratedPDFs([])
     try {
       const { startDate, endDate } = rangeForKey(rangeKey)
       const pdfs = await generateReports({
-        userId:       user.id,
+        userId:    user.id,
         startDate,
         endDate,
-        receiverName: receiverName.trim() || undefined,
         profile: {
           name:             profile.name,
           goal:             profile.goal,
@@ -107,8 +94,17 @@ export default function ShareScreen() {
           fat_target_g:     profile.fat_target_g,
         },
       })
-      setGeneratedPDFs(pdfs)
       track('pdf_report_generated', { range: rangeKey, days: pdfs.length })
+
+      // Share each PDF in sequence
+      for (const pdf of pdfs) {
+        await Sharing.shareAsync(pdf.uri, {
+          mimeType:    'application/pdf',
+          dialogTitle: `Surge Report — ${pdf.displayDate}`,
+          UTI:         'com.adobe.pdf',
+        })
+      }
+      track('pdf_report_shared', { range: rangeKey })
     } catch (err: any) {
       Alert.alert('Could not generate report', err.message ?? 'Please try again.')
     } finally {
@@ -116,77 +112,6 @@ export default function ShareScreen() {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Share a single PDF
-  // ---------------------------------------------------------------------------
-  async function handleShare(pdf: GeneratedPDF, index: number) {
-    const available = await Sharing.isAvailableAsync()
-    if (!available) {
-      Alert.alert('Sharing not available on this device.')
-      return
-    }
-    setSharingIndex(index)
-    try {
-      await Sharing.shareAsync(pdf.uri, {
-        mimeType: 'application/pdf',
-        dialogTitle: `Surge Report — ${pdf.displayDate}`,
-        UTI: 'com.adobe.pdf',
-      })
-      track('pdf_report_shared', { range: rangeKey })
-    } finally {
-      setSharingIndex(null)
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Send test report now
-  // ---------------------------------------------------------------------------
-  async function handleSendTestNow() {
-    if (!schedPhone.trim()) { Alert.alert('Enter a phone number first'); return }
-    setSendingTest(true)
-    try {
-      const { error } = await supabase.functions.invoke('schedule-reports', {
-        body: { testPhone: schedPhone.trim(), testUserId: profile?.id },
-      })
-      if (error) throw error
-      Alert.alert('Sent!', `Test report sent to ${schedPhone.trim()} via WhatsApp.`)
-      track('whatsapp_test_sent', {})
-    } catch (err: any) {
-      Alert.alert('Send failed', err.message ?? 'Please try again.')
-    } finally {
-      setSendingTest(false)
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Save schedule
-  // ---------------------------------------------------------------------------
-  async function saveSchedule() {
-    if (!profile) return
-    if (scheduleEnabled && !schedPhone.trim()) {
-      Alert.alert('Enter a phone number')
-      return
-    }
-    setSavingSchedule(true)
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          accountability_phone: scheduleEnabled ? schedPhone.trim() : null,
-          accountability_freq:  scheduleEnabled ? schedFreq : null,
-        })
-        .eq('id', profile.id)
-      if (error) throw error
-      Alert.alert('Saved!', scheduleEnabled
-        ? `Reports will be sent ${schedFreq === 'daily' ? 'daily' : 'weekly'}.`
-        : 'Scheduled reports turned off.'
-      )
-    } catch {
-      Alert.alert('Error', 'Could not save. Please try again.')
-    } finally {
-      setSavingSchedule(false)
-    }
-  }
 
   // ---------------------------------------------------------------------------
   // Render
@@ -219,7 +144,7 @@ export default function ShareScreen() {
               <TouchableOpacity
                 key={opt.key}
                 style={[styles.rangeChip, rangeKey === opt.key && styles.rangeChipActive]}
-                onPress={() => { setRangeKey(opt.key); setGeneratedPDFs([]) }}
+                onPress={() => setRangeKey(opt.key)}
               >
                 <Text style={[styles.rangeChipText, rangeKey === opt.key && styles.rangeChipTextActive]}>
                   {opt.label}
@@ -228,134 +153,41 @@ export default function ShareScreen() {
             ))}
           </View>
 
-          {/* Receiver name */}
-          <Text style={[styles.fieldLabel, { marginTop: Spacing.md }]}>
-            Report for (optional)
-          </Text>
-          <TextInput
-            style={styles.input}
-            value={receiverName}
-            onChangeText={v => { setReceiverName(v); setGeneratedPDFs([]) }}
-            placeholder="e.g. Coach Rahul"
-            placeholderTextColor={Colors.text3}
-            autoCorrect={false}
-          />
-
-          {/* Generate button */}
+          {/* Share button */}
           <TouchableOpacity
             style={[styles.generateBtn, generating && styles.btnDisabled]}
-            onPress={handleGenerate}
+            onPress={handleShareReport}
             disabled={generating}
             activeOpacity={0.85}
           >
             {generating
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.generateBtnText}>Generate PDF{rangeKey !== 'today' ? 's' : ''}</Text>
+              : <Text style={styles.generateBtnText}>Share Report</Text>
             }
           </TouchableOpacity>
-
-          {/* Generated PDFs list */}
-          {generatedPDFs.length > 0 && (
-            <View style={styles.pdfList}>
-              <Text style={styles.pdfListTitle}>
-                {generatedPDFs.length === 1 ? '1 PDF ready' : `${generatedPDFs.length} PDFs ready`}
-              </Text>
-              {generatedPDFs.map((pdf, i) => (
-                <View key={pdf.date} style={styles.pdfRow}>
-                  <View style={styles.pdfInfo}>
-                    <Text style={styles.pdfEmoji}>📄</Text>
-                    <Text style={styles.pdfDate}>{pdf.displayDate}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.shareBtn, sharingIndex === i && styles.btnDisabled]}
-                    onPress={() => handleShare(pdf, i)}
-                    disabled={sharingIndex !== null}
-                    activeOpacity={0.85}
-                  >
-                    {sharingIndex === i
-                      ? <ActivityIndicator color="#fff" size="small" />
-                      : <Text style={styles.shareBtnText}>Share</Text>
-                    }
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
         </View>
 
-        {/* ── Scheduled report section ── */}
-        <View style={styles.card}>
-          <View style={styles.scheduleHeader}>
+        {/* ── Scheduled report — Coming Soon ── */}
+        <View style={[styles.card, styles.comingSoonCard]}>
+          <View style={styles.comingSoonHeader}>
             <View style={{ flex: 1 }}>
               <Text style={styles.sectionTitle}>Scheduled report</Text>
               <Text style={styles.scheduleSubtitle}>Auto-send to your trainer or accountability partner</Text>
             </View>
-            <Switch
-              value={scheduleEnabled}
-              onValueChange={setScheduleEnabled}
-              trackColor={{ false: Colors.border, true: Colors.accent }}
-              thumbColor="#fff"
-            />
+            <View style={styles.comingSoonBadge}>
+              <Text style={styles.comingSoonBadgeText}>Coming Soon</Text>
+            </View>
           </View>
-
-          {scheduleEnabled && (
-            <>
-              <Text style={styles.fieldLabel}>WhatsApp number</Text>
-              <TextInput
-                style={styles.input}
-                value={schedPhone}
-                onChangeText={setSchedPhone}
-                placeholder="+91 98765 43210"
-                placeholderTextColor={Colors.text3}
-                keyboardType="phone-pad"
-                autoCorrect={false}
-              />
-
-              <Text style={[styles.fieldLabel, { marginTop: Spacing.sm }]}>Frequency</Text>
-              <View style={styles.chipRow}>
-                {(['daily', 'weekly'] as const).map(f => (
-                  <TouchableOpacity
-                    key={f}
-                    style={[styles.rangeChip, schedFreq === f && styles.rangeChipActive]}
-                    onPress={() => setSchedFreq(f)}
-                  >
-                    <Text style={[styles.rangeChipText, schedFreq === f && styles.rangeChipTextActive]}>
-                      {f === 'daily' ? 'Daily' : 'Weekly'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
-          )}
-
-          <TouchableOpacity
-            style={[styles.generateBtn, savingSchedule && styles.btnDisabled]}
-            onPress={saveSchedule}
-            disabled={savingSchedule}
-            activeOpacity={0.85}
-          >
-            {savingSchedule
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.generateBtnText}>
-                  {scheduleEnabled ? 'Save schedule' : 'Turn off schedule'}
-                </Text>
-            }
-          </TouchableOpacity>
-
-          {/* Test send — only show when a phone is set */}
-          {scheduleEnabled && schedPhone.trim().length > 0 && (
-            <TouchableOpacity
-              style={[styles.testBtn, sendingTest && styles.btnDisabled]}
-              onPress={handleSendTestNow}
-              disabled={sendingTest}
-              activeOpacity={0.85}
-            >
-              {sendingTest
-                ? <ActivityIndicator color={Colors.accent} size="small" />
-                : <Text style={styles.testBtnText}>Send test report now →</Text>
-              }
-            </TouchableOpacity>
-          )}
+          <View pointerEvents="none" style={{ gap: Spacing.sm, opacity: 0.4 }}>
+            <Text style={styles.fieldLabel}>WhatsApp number</Text>
+            <View style={[styles.input, { justifyContent: 'center' }]}>
+              <Text style={{ color: Colors.text3, fontSize: 14 }}>+91 98765 43210</Text>
+            </View>
+            <View style={styles.chipRow}>
+              <View style={styles.rangeChip}><Text style={styles.rangeChipText}>Daily</Text></View>
+              <View style={styles.rangeChip}><Text style={styles.rangeChipText}>Weekly</Text></View>
+            </View>
+          </View>
         </View>
 
       </ScrollView>
@@ -434,52 +266,23 @@ const styles = StyleSheet.create({
   generateBtnText: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: '#fff' },
   btnDisabled:     { opacity: 0.6 },
 
-  pdfList: {
-    marginTop:       Spacing.xs,
-    gap:             Spacing.sm,
-    borderTopWidth:  1,
-    borderTopColor:  Colors.border,
-    paddingTop:      Spacing.md,
-  },
-  pdfListTitle: { fontSize: FontSize.sm, color: Colors.text2, fontWeight: FontWeight.semibold },
-  pdfRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.bg,
-    borderRadius:    Radius.md,
-    borderWidth:     1,
-    borderColor:     Colors.border,
-    paddingHorizontal: Spacing.md,
-    paddingVertical:   Spacing.sm,
-  },
-  pdfInfo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  pdfEmoji: { fontSize: 18 },
-  pdfDate:  { fontSize: FontSize.sm, color: Colors.text1, fontWeight: FontWeight.medium },
-  shareBtn: {
-    backgroundColor:   Colors.accent,
-    borderRadius:      Radius.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical:   6,
-    minWidth:          64,
-    alignItems:        'center',
-  },
-  shareBtnText: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: '#fff' },
+  scheduleSubtitle: { fontSize: FontSize.xs, color: Colors.text2, marginTop: 2 },
 
-  testBtn: {
-    alignItems:  'center',
-    paddingVertical: Spacing.sm,
-    borderRadius:    Radius.md,
-    borderWidth:     1,
-    borderColor:     Colors.accent,
-  },
-  testBtnText: { fontSize: FontSize.sm, color: Colors.accent, fontWeight: FontWeight.semibold },
-
-  scheduleHeader: {
+  comingSoonCard:  { opacity: 0.7 },
+  comingSoonHeader: {
     flexDirection:  'row',
     alignItems:     'flex-start',
     justifyContent: 'space-between',
     gap:            Spacing.md,
   },
-  scheduleSubtitle: { fontSize: FontSize.xs, color: Colors.text2, marginTop: 2 },
+  comingSoonBadge: {
+    backgroundColor:   Colors.bg,
+    borderWidth:       1,
+    borderColor:       Colors.border,
+    borderRadius:      Radius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:   3,
+    alignSelf:         'flex-start',
+  },
+  comingSoonBadgeText: { fontSize: FontSize.xs, color: Colors.text3, fontWeight: FontWeight.semibold },
 })

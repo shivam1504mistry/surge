@@ -18,6 +18,8 @@ export interface WorkoutSet {
   set_number:    number
   reps:          number
   weight_kg:     number
+  distance_km?:  number
+  duration_min?: number
   rpe?:          number
   is_pr:         boolean
   input_source:  'tap' | 'voice' | 'template'
@@ -48,7 +50,7 @@ export interface WorkoutTemplate {
 // What's shown on the Today screen — loaded from DB, not from a memory buffer
 export interface TodayExercise {
   exercise_name: string
-  sets: Array<{ weight_kg: number; reps: number; set_number: number }>
+  sets: Array<{ weight_kg: number; reps: number; set_number: number; distance_km?: number; duration_min?: number }>
 }
 
 interface WorkoutState {
@@ -62,7 +64,7 @@ interface WorkoutState {
   saveVoiceLog: (exercises: Array<{
     name: string
     muscle: string
-    sets: Array<{ weight: number; reps: number }>
+    sets: Array<{ weight: number; reps: number; distance_km?: number; duration_min?: number }>
   }>) => Promise<{ error: string | null }>
 
   // ---- Today display ----
@@ -144,6 +146,7 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     const { data: recent } = await supabase
       .from('workout_sessions')
       .select('id')
+      .eq('user_id', user.id)
       .gte('started_at', threeHrsAgo)
       .order('started_at', { ascending: false })
       .limit(1)
@@ -180,6 +183,8 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
         set_number:    idx + 1,
         reps:          s.reps,
         weight_kg:     s.weight,
+        distance_km:   s.distance_km  ?? null,
+        duration_min:  s.duration_min ?? null,
         is_pr:         false,
         input_source:  'voice',
         logged_at:     now.toISOString(),
@@ -200,14 +205,44 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
   // Load today's exercises from DB for display
   // --------------------------------------------------------------------------
   loadTodayExercises: async () => {
+    const { data: { session: authSession } } = await supabase.auth.getSession()
+    const userId = authSession?.user?.id
+    if (!userId) return
+
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
 
-    const { data } = await supabase
+    // Step 1: get today's session IDs for this user (same pattern as history.tsx + generateReport.ts)
+    const { data: sessions } = await supabase
+      .from('workout_sessions')
+      .select('id')
+      .eq('user_id', userId)
+      .gte('started_at', todayStart.toISOString())
+
+    const sessionIds = (sessions ?? []).map((s: { id: string }) => s.id)
+    if (sessionIds.length === 0) {
+      set({ todayExercises: [] })
+      return
+    }
+
+    // Step 2: get sets for those sessions
+    let data: any[] | null = null
+    const full = await supabase
       .from('workout_sets')
-      .select('exercise_name, weight_kg, reps, set_number, logged_at')
-      .gte('logged_at', todayStart.toISOString())
+      .select('exercise_name, weight_kg, reps, set_number, distance_km, duration_min, logged_at')
+      .in('session_id', sessionIds)
       .order('logged_at', { ascending: true })
+
+    if (!full.error) {
+      data = full.data
+    } else {
+      const base = await supabase
+        .from('workout_sets')
+        .select('exercise_name, weight_kg, reps, set_number, logged_at')
+        .in('session_id', sessionIds)
+        .order('logged_at', { ascending: true })
+      data = base.data
+    }
 
     if (!data) return
 
@@ -215,9 +250,11 @@ export const useWorkoutStore = create<WorkoutState>((set, get) => ({
     for (const s of data) {
       if (!map.has(s.exercise_name)) map.set(s.exercise_name, [])
       map.get(s.exercise_name)!.push({
-        weight_kg:  Number(s.weight_kg),
-        reps:       Number(s.reps),
-        set_number: Number(s.set_number),
+        weight_kg:    Number(s.weight_kg),
+        reps:         Number(s.reps),
+        set_number:   Number(s.set_number),
+        distance_km:  s.distance_km  != null ? Number(s.distance_km)  : undefined,
+        duration_min: s.duration_min != null ? Number(s.duration_min) : undefined,
       })
     }
 

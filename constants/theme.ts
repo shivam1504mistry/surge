@@ -57,8 +57,8 @@ export const Spacing = {
 
 // Extra bottom padding so content clears the tab bar + home indicator on all devices.
 // 52 = tab content height, 34 = max home indicator (iPhone X+). Android home indicator = 0.
-export const TAB_BAR_HEIGHT = 52
-export const BOTTOM_SAFE_PADDING = TAB_BAR_HEIGHT + 34
+export const TAB_BAR_HEIGHT = 54  // floating pill height
+export const BOTTOM_SAFE_PADDING = 120  // clears floating pill + home indicator on all devices
 
 export const Shadow = {
   accent: {

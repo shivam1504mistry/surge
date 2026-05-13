@@ -93,6 +93,8 @@ PODS:
     - React-Core
     - React-runtimescheduler
     - ReactCommon
+  - ExpoPrint (55.0.13):
+    - ExpoModulesCore
   - ExpoSecureStore (55.0.13):
     - ExpoModulesCore
   - ExpoSharing (55.0.18):
@@ -2922,6 +2924,7 @@ DEPENDENCIES:
   - ExpoMediaLibrary (from `../node_modules/expo-media-library/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
   - ExpoModulesJSI (from `../node_modules/expo-modules-core`)
+  - ExpoPrint (from `../node_modules/expo-print/ios`)
   - ExpoSecureStore (from `../node_modules/expo-secure-store/ios`)
   - ExpoSharing (from `../node_modules/expo-sharing/ios`)
   - ExpoSplashScreen (from `../node_modules/expo-splash-screen/ios`)
@@ -3051,6 +3054,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-modules-core"
   ExpoModulesJSI:
     :path: "../node_modules/expo-modules-core"
+  ExpoPrint:
+    :path: "../node_modules/expo-print/ios"
   ExpoSecureStore:
     :path: "../node_modules/expo-secure-store/ios"
   ExpoSharing:
@@ -3244,6 +3249,7 @@ SPEC CHECKSUMS:
   ExpoMediaLibrary: d6b22096da42dea0b5a68fd3eef96761bbf592c4
   ExpoModulesCore: 19764c674093df6015773d1c3affccf135fe8918
   ExpoModulesJSI: 4f9a951679fdfbfca1e4feb5c1e10df045333a5a
+  ExpoPrint: 3b79c16d6778b4a89fb4eb9cc346925690cb0c74
   ExpoSecureStore: 38954f6bcef1287aa04c06fba3b86e8af3291ccd
   ExpoSharing: 5acc9d78894386d31b862b12ed1cebe7dce74e68
   ExpoSplashScreen: 7266d60c9553b82431b89bce0a77886ba1b05de4

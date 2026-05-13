@@ -12,7 +12,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   Alert,
@@ -20,17 +19,20 @@ import {
   Modal,
   FlatList,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRoute } from '@react-navigation/native'
 import { RouteProp } from '@react-navigation/native'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
 import { Goal, Sex, calculateTargets } from '../../constants/macros'
 import { ExperienceLevel } from './experience'
+import { FoodUnitPref } from './food-units'
 import { supabase } from '../../lib/supabase'
 import { useUserStore } from '../../stores/userStore'
+import { track } from '../../lib/analytics'
 
 type BaseParams = {
   name: string; age: number; sex: Sex; weight_kg: number; height_cm: number
-  goal: Goal; experience: ExperienceLevel
+  goal: Goal; experience: ExperienceLevel; food_unit_pref: FoodUnitPref
 }
 type RootParamList = { Accountability: BaseParams }
 
@@ -60,13 +62,11 @@ export default function AccountabilityScreen() {
   const setProfile = useUserStore((s) => s.setProfile)
   const session    = useUserStore((s) => s.session)
 
-  const [accName,     setAccName]     = useState('')
-  const [accPhone,    setAccPhone]    = useState('')
-  const [accCountry,  setAccCountry]  = useState<AccCountry>(ACC_COUNTRIES[0])
-  const [showPicker,  setShowPicker]  = useState(false)
-  const [accFreq,     setAccFreq]     = useState<Freq>('weekly')
-  const [skip,        setSkip]        = useState(false)
-  const [saving,      setSaving]      = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [accName,  setAccName]  = useState('')
+  const [accPhone, setAccPhone] = useState('')
+
+  React.useEffect(() => { track('onboarding_accountability_viewed') }, [])
 
   // Editable targets — pre-filled from calculation, user can override
   const defaultTargets = React.useMemo(() => calculateTargets({
@@ -79,55 +79,36 @@ export default function AccountabilityScreen() {
   const [fatG,      setFatG]      = useState(String(defaultTargets.fat_g))
 
   async function handleFinish() {
-    const cleanedPhone = accPhone.replace(/\D/g, '')
-    if (!skip && accPhone && cleanedPhone.length < 6) {
-      Alert.alert('Enter a valid phone number for your accountability partner')
-      return
-    }
-
     setSaving(true)
     try {
       const user = session?.user
       if (!user) throw new Error('Not authenticated')
 
-      const fullPhone = !skip && cleanedPhone
-        ? `${accCountry.code}${cleanedPhone}`
-        : undefined
-
       const profileData = {
-        id:                   user.id,
-        phone:                user.phone ?? null,
-        email:                user.email ?? null,
-        name:                 params.name,
-        age:                  params.age,
-        sex:                  params.sex,
-        weight_kg:            params.weight_kg,
-        height_cm:            params.height_cm,
+        id:               user.id,
+        phone:            user.phone ?? null,
+        email:            user.email ?? null,
+        name:             params.name,
+        age:              params.age,
+        sex:              params.sex,
+        weight_kg:        params.weight_kg,
+        height_cm:        params.height_cm,
         goal:                 params.goal,
         unit_pref:            'kg' as const,
-        calorie_target:       parseInt(calories)  || defaultTargets.calories,
-        protein_target_g:     parseInt(proteinG)  || defaultTargets.protein_g,
-        carbs_target_g:       parseInt(carbsG)    || defaultTargets.carbs_g,
-        fat_target_g:         parseInt(fatG)      || defaultTargets.fat_g,
-        tier:                 'free' as const,
-        accountability_name:  skip ? undefined : accName.trim() || undefined,
-        accountability_phone: fullPhone,
-        accountability_freq:  skip ? undefined : accFreq,
+        food_unit_pref:       params.food_unit_pref,
+        accountability_name:  accName.trim() || null,
+        accountability_phone: accPhone.trim() || null,
+        calorie_target:   parseInt(calories)  || defaultTargets.calories,
+        protein_target_g: parseInt(proteinG)  || defaultTargets.protein_g,
+        carbs_target_g:   parseInt(carbsG)    || defaultTargets.carbs_g,
+        fat_target_g:     parseInt(fatG)      || defaultTargets.fat_g,
+        tier:             'free' as const,
       }
 
       const { error } = await supabase.from('users').upsert(profileData)
       if (error) throw error
 
-      // Send coach welcome WhatsApp (fire-and-forget — don't block navigation on failure)
-      if (fullPhone && accName.trim()) {
-        const coachName  = accName.trim()
-        const freqLabel  = accFreq === 'daily' ? 'daily evening' : 'weekly'
-        const welcomeMsg = `Hey ${coachName}! 👋\n\n*${params.name}* has added you as their accountability coach on Surge ⚡\n\nYou'll receive a *${freqLabel} fitness report* on this number automatically — workouts logged, macros hit, progress made.\n\nGet Surge for yourself:\n${APP_DOWNLOAD_LINK}`
-        supabase.functions.invoke('send-whatsapp', {
-          body: { to: fullPhone, message: welcomeMsg },
-        }).catch((e: any) => console.warn('Coach WhatsApp failed (non-blocking):', e))
-      }
-
+      track('onboarding_complete', { goal: params.goal, experience: params.experience })
       setProfile(profileData)
       // App.tsx detects profile != null → navigates to MainTabs
     } catch (err: any) {
@@ -146,7 +127,7 @@ export default function AccountabilityScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.step}>4 of 4</Text>
+            <Text style={styles.step}>5 of 5</Text>
             <Text style={styles.title}>Who keeps you honest?</Text>
             <Text style={styles.subtitle}>
               People who share their progress with someone are{' '}
@@ -187,70 +168,44 @@ export default function AccountabilityScreen() {
             </View>
           </View>
 
-          {!skip && (
-            <>
-              {/* Name */}
+          {/* Accountability partner — name + phone (functional) */}
+          <View style={styles.accCard}>
+            <View style={styles.accHeader}>
+              <View>
+                <Text style={styles.comingSoonTitle}>Accountability partner</Text>
+                <Text style={styles.comingSoonSub}>Optional — skip if you prefer</Text>
+              </View>
+              <View style={styles.comingSoonBadge}>
+                <Text style={styles.comingSoonBadgeText}>Auto-reports coming soon</Text>
+              </View>
+            </View>
+            <View style={styles.comingSoonFields}>
               <View style={styles.field}>
                 <Text style={styles.label}>Their name</Text>
                 <TextInput
                   style={styles.input}
-                  value={accName}
-                  onChangeText={setAccName}
                   placeholder="e.g. Coach Rajan"
                   placeholderTextColor={Colors.text3}
+                  value={accName}
+                  onChangeText={setAccName}
                   autoCapitalize="words"
+                  returnKeyType="next"
                 />
               </View>
-
-              {/* Phone */}
               <View style={styles.field}>
                 <Text style={styles.label}>WhatsApp number</Text>
-                <View style={styles.phoneRow}>
-                  <TouchableOpacity style={styles.countryChip} onPress={() => setShowPicker(true)} activeOpacity={0.75}>
-                    <Text style={styles.countryChipText}>{accCountry.flag} {accCountry.code}</Text>
-                    <Text style={styles.countryChipArrow}>▾</Text>
-                  </TouchableOpacity>
-                  <TextInput
-                    style={[styles.input, styles.phoneInput]}
-                    value={accPhone}
-                    onChangeText={(v) => setAccPhone(v.replace(/\D/g, '').slice(0, accCountry.maxLen))}
-                    placeholder="98765 43210"
-                    placeholderTextColor={Colors.text3}
-                    keyboardType="phone-pad"
-                    maxLength={accCountry.maxLen}
-                  />
-                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="+91 98765 43210"
+                  placeholderTextColor={Colors.text3}
+                  value={accPhone}
+                  onChangeText={setAccPhone}
+                  keyboardType="phone-pad"
+                  returnKeyType="done"
+                />
               </View>
-
-              {/* Frequency */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Send reports</Text>
-                <View style={styles.freqRow}>
-                  {FREQ_OPTIONS.map((f) => (
-                    <TouchableOpacity
-                      key={f.value}
-                      style={[styles.freqBtn, accFreq === f.value && styles.freqBtnSelected]}
-                      onPress={() => setAccFreq(f.value)}
-                    >
-                      <Text style={[styles.freqText, accFreq === f.value && styles.freqTextSelected]}>
-                        {f.label}
-                      </Text>
-                      <Text style={[styles.freqDesc, accFreq === f.value && styles.freqDescSelected]}>
-                        {f.desc}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </>
-          )}
-
-          {/* Skip button */}
-          <TouchableOpacity style={[styles.skipBtn, skip && styles.skipBtnActive]} onPress={() => setSkip((s) => !s)}>
-            <Text style={[styles.skipBtnText, skip && styles.skipBtnTextActive]}>
-              {skip ? '✓ Skipping accountability' : 'Skip for now — add later in Profile'}
-            </Text>
-          </TouchableOpacity>
+            </View>
+          </View>
 
           {/* CTA */}
           <TouchableOpacity
@@ -267,29 +222,6 @@ export default function AccountabilityScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Country picker modal */}
-      <Modal visible={showPicker} animationType="slide" transparent onRequestClose={() => setShowPicker(false)}>
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowPicker(false)}>
-          <View style={styles.pickerSheet}>
-            <Text style={styles.pickerTitle}>Select country</Text>
-            <FlatList
-              data={ACC_COUNTRIES}
-              keyExtractor={item => item.code + item.name}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.pickerRow, item.name === accCountry.name && styles.pickerRowSelected]}
-                  onPress={() => { setAccCountry(item); setAccPhone(''); setShowPicker(false) }}
-                >
-                  <Text style={styles.pickerFlag}>{item.flag}</Text>
-                  <Text style={styles.pickerName}>{item.name}</Text>
-                  <Text style={styles.pickerCode}>{item.code}</Text>
-                  {item.name === accCountry.name && <Text style={styles.pickerCheck}>✓</Text>}
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </SafeAreaView>
   )
 }
@@ -392,6 +324,51 @@ const styles = StyleSheet.create({
   pickerName:  { flex: 1, fontSize: FontSize.base, color: Colors.text1, fontWeight: FontWeight.medium },
   pickerCode:  { fontSize: FontSize.base, color: Colors.text2 },
   pickerCheck: { fontSize: FontSize.base, color: Colors.accent, fontWeight: FontWeight.bold },
+
+  accCard: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    padding:         Spacing.md,
+    gap:             Spacing.md,
+  },
+  accHeader: {
+    flexDirection:  'row',
+    alignItems:     'flex-start',
+    justifyContent: 'space-between',
+  },
+  comingSoonCard: {
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.border,
+    padding:         Spacing.md,
+    gap:             Spacing.md,
+    opacity:         0.6,
+  },
+  comingSoonHeader: {
+    flexDirection:  'row',
+    alignItems:     'flex-start',
+    justifyContent: 'space-between',
+  },
+  comingSoonTitle: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.text1 },
+  comingSoonSub:   { fontSize: FontSize.xs, color: Colors.text2, marginTop: 2 },
+  comingSoonBadge: {
+    backgroundColor:   Colors.surface,
+    borderWidth:       1,
+    borderColor:       Colors.border,
+    borderRadius:      Radius.full,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical:   3,
+  },
+  comingSoonBadgeText: { fontSize: FontSize.xs, color: Colors.text3, fontWeight: FontWeight.semibold },
+  comingSoonFields:    { gap: Spacing.sm },
+  comingSoonInput: {
+    justifyContent: 'center',
+    backgroundColor: Colors.bg,
+  },
+  comingSoonPlaceholder: { fontSize: FontSize.base, color: Colors.text3 },
 
   freqRow: { gap: Spacing.xs },
   freqBtn: {

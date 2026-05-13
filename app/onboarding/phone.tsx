@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/theme'
 import { signInWithGoogle, sendOTP } from '../../lib/supabase'
 import { useNavigation } from '@react-navigation/native'
+import { track } from '../../lib/analytics'
 
 const { height: SCREEN_H } = Dimensions.get('window')
 const CARD_HEIGHT = SCREEN_H * 0.52
@@ -73,6 +74,7 @@ export default function WelcomeScreen() {
   const cvpOpacity = useRef(new Animated.Value(1)).current
 
   useEffect(() => {
+    track('onboarding_landing_viewed')
     // Logo fades in first
     Animated.timing(logoOpacity, {
       toValue:         1,
@@ -151,6 +153,7 @@ export default function WelcomeScreen() {
   // Google OAuth
   // ---------------------------------------------------------------------------
   async function handleGoogleSignIn() {
+    track('onboarding_google_tapped')
     setLoading(true)
     try {
       const { error } = await signInWithGoogle()
@@ -172,6 +175,7 @@ export default function WelcomeScreen() {
       return
     }
     const formatted = `${country.code}${cleaned}`
+    track('onboarding_phone_submitted')
     setLoading(true)
     try {
       const { error } = await sendOTP(formatted)
@@ -249,7 +253,7 @@ export default function WelcomeScreen() {
               <View style={styles.authButtons}>
                 <TouchableOpacity
                   style={styles.phoneBtn}
-                  onPress={() => setMode('phone')}
+                  onPress={() => { track('onboarding_phone_viewed'); setMode('phone') }}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.phoneBtnText}>📱 Continue with phone number</Text>
