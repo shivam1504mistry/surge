@@ -4,8 +4,8 @@
 export type Goal = 'fat_loss' | 'muscle_gain' | 'recomp' | 'maintain' | 'performance'
 export type Sex  = 'male' | 'female' | 'other'
 
-// Activity multiplier — defaulted to moderate (gym 3-5x/week)
-const ACTIVITY_MULTIPLIER = 1.55
+// Activity multiplier — sedentary to lightly active baseline
+const ACTIVITY_MULTIPLIER = 1.2
 
 // Calorie adjustment by goal (delta from TDEE)
 const GOAL_DELTA: Record<Goal, number> = {
@@ -32,12 +32,13 @@ export function calculateTargets(params: {
       : 10 * weight_kg + 6.25 * height_cm - 5 * age - 161
 
   const tdee     = Math.round(bmr * ACTIVITY_MULTIPLIER)
-  const calories = Math.round(tdee + GOAL_DELTA[goal])
+  const rawCals  = tdee + GOAL_DELTA[goal]
 
-  // Macro split: 2g protein per kg, 25% fat, remainder carbs
-  const protein_g = Math.round(weight_kg * 2.0)
-  const fat_g     = Math.round((calories * 0.25) / 9)
-  const carbs_g   = Math.round((calories - protein_g * 4 - fat_g * 9) / 4)
+  // Round to friendly multiples: calories→50, protein/carbs→10, fat→5
+  const calories  = Math.round(rawCals / 50) * 50
+  const protein_g = Math.round((weight_kg * 2.0) / 10) * 10
+  const fat_g     = Math.round(((calories * 0.25) / 9) / 5) * 5
+  const carbs_g   = Math.round(((calories - protein_g * 4 - fat_g * 9) / 4) / 10) * 10
 
   return { calories, protein_g, carbs_g, fat_g }
 }

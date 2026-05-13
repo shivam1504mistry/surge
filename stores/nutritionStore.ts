@@ -53,13 +53,19 @@ interface NutritionState {
   addAndSave:         (userId: string, entryData: Omit<FoodEntry, 'id' | 'logged_at'>) => Promise<FoodEntry>
   loadTodayEntries:   (userId: string) => Promise<void>
   deleteEntry:        (userId: string, id: string) => Promise<void>
+  updateEntry:        (userId: string, id: string, patch: Partial<Pick<FoodEntry, 'calories' | 'protein_g' | 'carbs_g' | 'fat_g' | 'serving_size'>>) => Promise<void>
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+/** Returns today's date as 'YYYY-MM-DD' in LOCAL time — avoids UTC midnight offset bugs for IST users */
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10) // 'YYYY-MM-DD'
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dy = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dy}`
 }
 
 // ---------------------------------------------------------------------------
@@ -118,17 +124,27 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     // Optimistic local update
     set((state) => ({ todayEntries: [...state.todayEntries, entry] }))
 
+    // Always get a fresh session directly from Supabase auth —
+    // avoids race conditions where Zustand store hasn't loaded yet,
+    // or where a token refresh left auth.uid() temporarily null.
+    const { data: { session } } = await supabase.auth.getSession()
+    const uid = session?.user?.id ?? userId
+    if (!uid) {
+      console.warn('[NutritionStore] addAndSave: no user session — keeping local state only')
+      return entry
+    }
+
     // Persist to Supabase (food_entries table has user_id FK, not stored in FoodEntry type)
     const { error } = await supabase.from('food_entries').insert({
       id:           entry.id,
-      user_id:      userId,
+      user_id:      uid,
       logged_date:  entry.logged_date,
       meal_slot:    entry.meal_slot,
       food_name:    entry.food_name,
-      calories:     entry.calories,
-      protein_g:    entry.protein_g,
-      carbs_g:      entry.carbs_g,
-      fat_g:        entry.fat_g,
+      calories:     Math.round(Number(entry.calories)),
+      protein_g:    Math.round(Number(entry.protein_g)),
+      carbs_g:      Math.round(Number(entry.carbs_g)),
+      fat_g:        Math.round(Number(entry.fat_g)),
       serving_size: entry.serving_size,
       serving_unit: entry.serving_unit,
       source:       entry.source,
@@ -138,7 +154,7 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
     })
 
     if (error) {
-      console.error('[NutritionStore] Failed to save food entry:', error.message)
+      console.error('[NutritionStore] Failed to save food entry:', error.message, 'code:', error.code, 'uid:', uid)
       // Roll back optimistic update on failure
       set((state) => ({
         todayEntries: state.todayEntries.filter((e) => e.id !== entry.id),
@@ -169,6 +185,25 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       console.error('[NutritionStore] Failed to load today entries:', err.message)
     } finally {
       set({ isLoading: false })
+    }
+  },
+
+  /** Updates macros/serving locally and persists to Supabase. */
+  updateEntry: async (userId, id, patch) => {
+    // Optimistic local update
+    set((state) => ({
+      todayEntries: state.todayEntries.map((e) =>
+        e.id === id ? { ...e, ...patch } : e
+      ),
+    }))
+    const { error } = await supabase
+      .from('food_entries')
+      .update(patch)
+      .eq('id', id)
+      .eq('user_id', userId)
+    if (error) {
+      console.error('[NutritionStore] Failed to update entry:', error.message)
+      get().loadTodayEntries(userId)
     }
   },
 

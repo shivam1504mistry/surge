@@ -15,6 +15,7 @@ import {
 } from 'react-native'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../constants/theme'
 import { MealSlot } from '../stores/nutritionStore'
+import { track } from '../lib/analytics'
 
 // ---------------------------------------------------------------------------
 // expo-camera is an optional peer dep for barcode scanning.
@@ -50,25 +51,33 @@ interface OFFProduct {
 }
 
 interface NormalisedFood {
-  off_food_id:  string
-  food_name:    string
-  kcal_per_100: number
-  protein_per_100: number
-  carbs_per_100:   number
-  fat_per_100:     number
-  default_serving: number
-  serving_unit:    string
+  off_food_id:      string
+  food_name:        string
+  kcal_per_100:     number
+  protein_per_100:  number
+  carbs_per_100:    number
+  fat_per_100:      number
+  default_serving:  number
+  serving_unit:     string
+  // gram equivalent per non-g/ml unit — used so switching to "piece" gives correct macros
+  unit_gram_map?:   Record<string, number>
 }
 
 function normalise(p: OFFProduct): NormalisedFood {
   const n = p.nutriments
+  // OFF uses several field name conventions — try all three
+  const kcal =
+    n['energy-kcal_100g'] ??
+    (n as any)['energy-kcal'] ??
+    ((n as any)['energy_100g'] ? (n as any)['energy_100g'] / 4.184 : undefined) ??
+    0
   return {
     off_food_id:      p.code,
     food_name:        p.product_name || 'Unknown food',
-    kcal_per_100:     n['energy-kcal_100g']   ?? 0,
-    protein_per_100:  n['proteins_100g']       ?? 0,
-    carbs_per_100:    n['carbohydrates_100g']  ?? 0,
-    fat_per_100:      n['fat_100g']            ?? 0,
+    kcal_per_100:     kcal,
+    protein_per_100:  n['proteins_100g']      ?? 0,
+    carbs_per_100:    n['carbohydrates_100g'] ?? 0,
+    fat_per_100:      n['fat_100g']           ?? 0,
     default_serving:  100,
     serving_unit:     'g',
   }
@@ -77,12 +86,47 @@ function normalise(p: OFFProduct): NormalisedFood {
 async function searchOFF(query: string): Promise<NormalisedFood[]> {
   const url =
     `${OFF_BASE}/cgi/search.pl?search_terms=${encodeURIComponent(query)}` +
-    `&json=1&page_size=20&fields=code,product_name,serving_size,nutriments`
-  const res  = await fetch(url)
+    `&json=1&page_size=50&sort_by=popularity_key&action=process` +
+    `&fields=code,product_name,serving_size,nutriments`
+  const res  = await fetch(url, {
+    headers: { 'User-Agent': 'SurgeApp/1.0 (fitness tracker)' },
+  })
   const data = await res.json()
   return ((data.products ?? []) as OFFProduct[])
     .filter((p) => p.product_name)
     .map(normalise)
+}
+
+// ---------------------------------------------------------------------------
+// Common Indian foods — shown as local results alongside OFF results
+// (per 100g unless noted)
+// ---------------------------------------------------------------------------
+const INDIAN_FOODS: NormalisedFood[] = [
+  { off_food_id: 'in_roti',        food_name: 'Roti (whole wheat)',      kcal_per_100: 297, protein_per_100: 8.5, carbs_per_100: 56,  fat_per_100: 4,   default_serving: 1,   serving_unit: 'roti',  unit_gram_map: { roti: 35, piece: 35, g: 1 } },
+  { off_food_id: 'in_rice',        food_name: 'Cooked Rice',             kcal_per_100: 130, protein_per_100: 2.7, carbs_per_100: 28,  fat_per_100: 0.3, default_serving: 150, serving_unit: 'g',     unit_gram_map: { katori: 150, cup: 200 } },
+  { off_food_id: 'in_dal',         food_name: 'Dal (cooked, mixed)',     kcal_per_100: 90,  protein_per_100: 5,   carbs_per_100: 14,  fat_per_100: 1,   default_serving: 150, serving_unit: 'g',     unit_gram_map: { katori: 150, cup: 200 } },
+  { off_food_id: 'in_paneer',      food_name: 'Paneer',                  kcal_per_100: 265, protein_per_100: 18,  carbs_per_100: 4,   fat_per_100: 20,  default_serving: 100, serving_unit: 'g' },
+  { off_food_id: 'in_chicken',     food_name: 'Chicken Breast (cooked)', kcal_per_100: 165, protein_per_100: 31,  carbs_per_100: 0,   fat_per_100: 4,   default_serving: 150, serving_unit: 'g' },
+  { off_food_id: 'in_egg',         food_name: 'Egg (whole)',             kcal_per_100: 143, protein_per_100: 12,  carbs_per_100: 1,   fat_per_100: 10,  default_serving: 1,   serving_unit: 'piece', unit_gram_map: { piece: 55, g: 1 } },
+  { off_food_id: 'in_milk',        food_name: 'Whole Milk',              kcal_per_100: 61,  protein_per_100: 3.2, carbs_per_100: 4.7, fat_per_100: 3.3, default_serving: 200, serving_unit: 'ml',    unit_gram_map: { cup: 240, katori: 150 } },
+  { off_food_id: 'in_curd',        food_name: 'Curd / Dahi',             kcal_per_100: 60,  protein_per_100: 3.5, carbs_per_100: 4.7, fat_per_100: 3,   default_serving: 150, serving_unit: 'g',     unit_gram_map: { katori: 150, cup: 200 } },
+  { off_food_id: 'in_banana',      food_name: 'Banana',                  kcal_per_100: 89,  protein_per_100: 1.1, carbs_per_100: 23,  fat_per_100: 0.3, default_serving: 1,   serving_unit: 'piece', unit_gram_map: { piece: 100, g: 1 } },
+  { off_food_id: 'in_oats',        food_name: 'Oats (cooked)',           kcal_per_100: 68,  protein_per_100: 2.4, carbs_per_100: 12,  fat_per_100: 1.4, default_serving: 200, serving_unit: 'g',     unit_gram_map: { cup: 240, katori: 150 } },
+  { off_food_id: 'in_sabzi',       food_name: 'Mixed Vegetable Sabzi',   kcal_per_100: 80,  protein_per_100: 3,   carbs_per_100: 10,  fat_per_100: 3,   default_serving: 150, serving_unit: 'g',     unit_gram_map: { katori: 150, cup: 200 } },
+  { off_food_id: 'in_whey',        food_name: 'Whey Protein Powder',     kcal_per_100: 370, protein_per_100: 75,  carbs_per_100: 8,   fat_per_100: 4,   default_serving: 30,  serving_unit: 'g',     unit_gram_map: { tbsp: 15 } },
+  { off_food_id: 'in_peanutbutter',food_name: 'Peanut Butter',           kcal_per_100: 588, protein_per_100: 25,  carbs_per_100: 20,  fat_per_100: 50,  default_serving: 30,  serving_unit: 'g',     unit_gram_map: { tbsp: 16, tsp: 5 } },
+  { off_food_id: 'in_almonds',     food_name: 'Almonds',                 kcal_per_100: 579, protein_per_100: 21,  carbs_per_100: 22,  fat_per_100: 50,  default_serving: 28,  serving_unit: 'g',     unit_gram_map: { piece: 1.2 } },
+  { off_food_id: 'in_poha',        food_name: 'Poha (cooked)',           kcal_per_100: 130, protein_per_100: 2,   carbs_per_100: 28,  fat_per_100: 1.5, default_serving: 150, serving_unit: 'g',     unit_gram_map: { katori: 150, cup: 200 } },
+  { off_food_id: 'in_idli',        food_name: 'Idli',                    kcal_per_100: 58,  protein_per_100: 2,   carbs_per_100: 12,  fat_per_100: 0.5, default_serving: 2,   serving_unit: 'piece', unit_gram_map: { piece: 50, g: 1 } },
+  { off_food_id: 'in_dosa',        food_name: 'Dosa (plain)',            kcal_per_100: 130, protein_per_100: 3,   carbs_per_100: 26,  fat_per_100: 1.5, default_serving: 1,   serving_unit: 'piece', unit_gram_map: { piece: 80, g: 1 } },
+  { off_food_id: 'in_sambar',      food_name: 'Sambar',                  kcal_per_100: 45,  protein_per_100: 2.5, carbs_per_100: 7,   fat_per_100: 1,   default_serving: 150, serving_unit: 'ml',    unit_gram_map: { katori: 150, cup: 200 } },
+  { off_food_id: 'in_butter',      food_name: 'Butter',                  kcal_per_100: 717, protein_per_100: 0.9, carbs_per_100: 0.1, fat_per_100: 81,  default_serving: 10,  serving_unit: 'g',     unit_gram_map: { tbsp: 14, tsp: 4.7 } },
+  { off_food_id: 'in_ghee',        food_name: 'Ghee',                    kcal_per_100: 900, protein_per_100: 0,   carbs_per_100: 0,   fat_per_100: 100, default_serving: 5,   serving_unit: 'g',     unit_gram_map: { tbsp: 14, tsp: 4.7 } },
+]
+
+function searchIndian(query: string): NormalisedFood[] {
+  const lower = query.toLowerCase()
+  return INDIAN_FOODS.filter(f => f.food_name.toLowerCase().includes(lower))
 }
 
 async function lookupBarcode(barcode: string): Promise<NormalisedFood | null> {
@@ -155,6 +199,7 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
   // -------------------------------------------------------------------------
   React.useEffect(() => {
     if (visible) {
+      track('food_search_open')
       setScreen('search')
       setQuery('')
       setResults([])
@@ -173,26 +218,49 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
     if (text.trim().length < 2) { setResults([]); return }
     searchTimeout.current = setTimeout(async () => {
+      track('food_search_query', { query: text.trim() })
+      // Show Indian foods immediately (local, instant)
+      const local = searchIndian(text.trim())
+      setResults(local)
       setSearching(true)
       try {
-        const found = await searchOFF(text.trim())
-        setResults(found)
+        const remote = await searchOFF(text.trim())
+        // Merge: local first, then OFF results not already in local
+        const localIds = new Set(local.map(f => f.off_food_id))
+        setResults([...local, ...remote.filter(r => !localIds.has(r.off_food_id))])
       } catch {
-        setResults([])
+        // Keep local results on failure
       } finally {
         setSearching(false)
       }
-    }, 500)
+    }, 400)
   }, [])
 
   // -------------------------------------------------------------------------
   // Select a food → go to form
   // -------------------------------------------------------------------------
   const selectFood = (food: NormalisedFood) => {
+    track('food_search_result_tap', { food_name: food.food_name })
     setSelected(food)
     setServingSize(String(food.default_serving))
     setServingUnit(food.serving_unit)
     setScreen('form')
+  }
+
+  // When user taps a unit chip, reset the serving size to the natural default for that unit
+  const handleUnitChange = (unit: string) => {
+    setServingUnit(unit)
+    if (!selected) return
+    if (unit === selected.serving_unit) {
+      setServingSize(String(selected.default_serving))
+    } else if (unit === 'g' || unit === 'ml') {
+      // Convert default serving back to grams
+      const gramsPerUnit = selected.unit_gram_map?.[selected.serving_unit] ?? 1
+      setServingSize(String(Math.round(selected.default_serving * gramsPerUnit)))
+    } else {
+      // Non-gram unit — default to 1
+      setServingSize('1')
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -220,7 +288,17 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
   // -------------------------------------------------------------------------
   const computedMacros = (() => {
     if (!selected) return null
-    const factor = (parseFloat(servingSize) || 0) / 100
+    const qty = parseFloat(servingSize) || 0
+    // For g/ml units: factor = qty / 100 (direct weight-based)
+    // For other units (piece, roti, katori…): look up gram equivalent, else treat as grams
+    let gramsEquiv: number
+    if (servingUnit === 'g' || servingUnit === 'ml') {
+      gramsEquiv = qty
+    } else {
+      const gramsPerUnit = selected.unit_gram_map?.[servingUnit] ?? 100
+      gramsEquiv = qty * gramsPerUnit
+    }
+    const factor = gramsEquiv / 100
     return {
       calories:  Math.round(selected.kcal_per_100    * factor),
       protein_g: Math.round(selected.protein_per_100 * factor * 10) / 10,
@@ -234,6 +312,7 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
   // -------------------------------------------------------------------------
   const handleSave = () => {
     if (!selected || !computedMacros) return
+    track('food_search_save', { food_name: selected.food_name, calories: computedMacros.calories })
     const size = parseFloat(servingSize)
     if (!size || size <= 0) {
       Alert.alert('Invalid serving', 'Enter a valid serving size.')
@@ -345,7 +424,7 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
               <TouchableOpacity
                 key={u}
                 style={[styles.unitChip, servingUnit === u && styles.unitChipActive]}
-                onPress={() => setServingUnit(u)}
+                onPress={() => handleUnitChange(u)}
               >
                 <Text style={[styles.unitChipText, servingUnit === u && styles.unitChipTextActive]}>
                   {u}
@@ -403,7 +482,7 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
         />
         <TouchableOpacity
           style={styles.barcodeBtn}
-          onPress={() => setScreen('barcode')}
+          onPress={() => { track('food_search_barcode_open'); setScreen('barcode') }}
           accessibilityLabel="Scan barcode"
         >
           <Text style={{ fontSize: 22 }}>〔〕</Text>
@@ -462,7 +541,7 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
     >
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header */}
         <View style={styles.header}>
