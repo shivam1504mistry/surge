@@ -31,7 +31,7 @@ interface DayData {
   hasWorkout: boolean
   hasFood:    boolean
   exercises:  { exercise_name: string; sets: { set_number: number; weight_kg: number; reps: number }[] }[]
-  foods:      { food_name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number; meal_slot: string }[]
+  foods:      { food_name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number }[]
 }
 
 type MonthCache = Record<string, DayData> // key: 'YYYY-MM-DD'
@@ -95,7 +95,7 @@ export default function HistoryScreen() {
           : Promise.resolve({ data: [] }),
         supabase
           .from('food_entries')
-          .select('food_name, calories, protein_g, carbs_g, fat_g, meal_slot, logged_date')
+          .select('food_name, calories, protein_g, carbs_g, fat_g, logged_date')
           .gte('logged_date', monthStart)
           .lte('logged_date', monthEnd)
           .eq('user_id', uid)
@@ -129,7 +129,6 @@ export default function HistoryScreen() {
           protein_g: Number(row.protein_g),
           carbs_g:   Number(row.carbs_g),
           fat_g:     Number(row.fat_g),
-          meal_slot: row.meal_slot,
         })
       }
 

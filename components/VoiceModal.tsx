@@ -55,7 +55,6 @@ export interface ParsedFood {
   fat_g:       number
   serving_size: number
   serving_unit: string
-  meal_slot:   'breakfast' | 'lunch' | 'dinner' | 'snacks'
   ai_estimated?: boolean
   ingredients?: Array<{
     name:         string
@@ -100,8 +99,8 @@ const STUB_SESSIONS: StubSession[] = [
     type: 'food',
     transcript: 'Maine lunch mein 2 roti aur ek katori dal khayi',
     foods: [
-      { name: '2 Roti',      calories: 160, protein_g: 4,  carbs_g: 32, fat_g: 2, serving_size: 2,   serving_unit: 'piece', meal_slot: 'lunch' },
-      { name: 'Dal (1 bowl)',calories: 120, protein_g: 8,  carbs_g: 18, fat_g: 3, serving_size: 1,   serving_unit: 'katori', meal_slot: 'lunch' },
+      { name: '2 Roti',      calories: 160, protein_g: 4,  carbs_g: 32, fat_g: 2, serving_size: 2,   serving_unit: 'piece' },
+      { name: 'Dal (1 bowl)',calories: 120, protein_g: 8,  carbs_g: 18, fat_g: 3, serving_size: 1,   serving_unit: 'katori' },
     ],
   },
   {

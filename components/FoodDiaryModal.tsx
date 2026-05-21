@@ -1,10 +1,10 @@
 /**
  * FoodDiaryModal.tsx
  *
- * Full-day food diary — same visual language as FoodConfirmModal review screen.
- * Shows all todayEntries grouped by meal slot, with inline qty +/− and
- * editable macro fields. Every change immediately syncs to Supabase via
- * nutritionStore.updateEntry / deleteEntry.
+ * Full-day food diary — chronological flat list of all today's entries.
+ * Tap an entry to expand: edit serving qty (auto-scales macros), edit any
+ * macro cell directly (isolated edit), or remove. Every change syncs to
+ * Supabase via nutritionStore.updateEntry / deleteEntry.
  */
 
 import React, { useState, useEffect } from 'react'
@@ -298,22 +298,6 @@ const s = StyleSheet.create({
   totalCell:   { alignItems: 'center' },
   totalVal:    { fontSize: FontSize.xl, fontWeight: FontWeight.black },
   totalLbl:    { fontSize: 9, color: Colors.text3, marginTop: 2, fontWeight: FontWeight.bold, letterSpacing: 0.4 },
-
-  // Slot
-  slotHeader: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  slotTitle: {
-    fontSize:      FontSize.xs,
-    color:         Colors.text3,
-    fontWeight:    FontWeight.bold,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-  slotKcal: { fontSize: FontSize.xs, color: Colors.text3, fontWeight: FontWeight.semibold },
 
   emptySlot: {
     backgroundColor: Colors.surface,

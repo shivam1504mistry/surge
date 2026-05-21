@@ -150,7 +150,7 @@ export default function ImageFoodModal({ visible, isPro, onClose, onSave }: Prop
 
   function updateFood(index: number, field: keyof ParsedFood, value: string) {
     setFoods(prev => prev.map((f, i) =>
-      i === index ? { ...f, [field]: field === 'name' || field === 'serving_unit' || field === 'meal_slot' ? value : parseFloat(value) || 0 } : f
+      i === index ? { ...f, [field]: field === 'name' || field === 'serving_unit' ? value : parseFloat(value) || 0 } : f
     ))
   }
 

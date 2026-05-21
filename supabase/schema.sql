@@ -100,7 +100,6 @@ create table if not exists public.food_entries (
   id             uuid primary key default gen_random_uuid(),
   user_id        uuid not null references public.users(id) on delete cascade,
   logged_date    date not null,
-  meal_slot      text not null check (meal_slot in ('breakfast','lunch','dinner','snacks')),
   food_name      text not null,
   calories       int not null,
   protein_g      numeric not null,

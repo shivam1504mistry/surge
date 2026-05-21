@@ -56,7 +56,6 @@ Output pure JSON (no markdown):
       "fat_g": number,
       "serving_size": number,
       "serving_unit": "g|ml|piece|katori|roti|bowl|etc",
-      "meal_slot": "breakfast|lunch|dinner|snacks",
       "ai_estimated": true
     }
   ]
@@ -64,7 +63,6 @@ Output pure JSON (no markdown):
 
 Rules:
 - Always set ai_estimated: true (these are estimates from a photo)
-- Guess meal_slot from context clues in the food (e.g. paratha → breakfast, dal-rice → lunch)
 - If no food is visible, return { "foods": [], "error": "No food detected" }
 - Never make up food that isn't clearly visible`,
           },

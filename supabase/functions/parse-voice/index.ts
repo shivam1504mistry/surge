@@ -24,16 +24,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
-    const { audio, mimeType, _test_transcript, food_unit_pref, localHour } = body
-
-    // Determine meal slot from local hour if provided
-    const mealSlotHint =
-      typeof localHour === 'number'
-        ? localHour >= 5  && localHour < 11 ? 'breakfast'
-        : localHour >= 11 && localHour < 15 ? 'lunch'
-        : localHour >= 15 && localHour < 19 ? 'snacks'
-        : 'dinner'
-        : 'dinner'
+    const { audio, mimeType, _test_transcript, food_unit_pref } = body
 
     // Map unit pref to a human-readable instruction injected into the GPT prompt
     const unitInstruction =
@@ -104,7 +95,6 @@ Rules:
 - Weight units: ALWAYS output weight in kg. If user says "lbs" convert to kg (1 lb = 0.4536 kg). "225 lbs bench press" → weight: 102.1.
 - Abs/core: "100 sit ups" → sets: [{weight:0, reps:100}]
 - For food: estimate macros from standard Indian/international portions if not stated. Mark ai_estimated: true.
-- meal_slot: set based on what the user says ("had breakfast", "for lunch", etc). If not mentioned, default to "${mealSlotHint}" (detected from current time).
 - Detect language: English or Hindi/Hinglish both work.
 
 Output JSON (no markdown, pure JSON):
@@ -129,7 +119,6 @@ Always return BOTH arrays. Set type to "workout", "food", or "both".
       "fat_g": number,
       "serving_size": number,
       "serving_unit": "g|ml|piece|katori|roti|etc",
-      "meal_slot": "breakfast" | "lunch" | "dinner" | "snacks",
       "ai_estimated": boolean,
       "ingredients": [
         {

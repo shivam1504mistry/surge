@@ -11,14 +11,12 @@ function uuid(): string {
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-export type MealSlot     = 'breakfast' | 'lunch' | 'dinner' | 'snacks'
 export type FoodSource   = 'search' | 'barcode' | 'voice' | 'image_ai'
 export type AIConfidence = 'high' | 'medium' | 'low'
 
 export interface FoodEntry {
   id:             string
   logged_date:    string        // 'YYYY-MM-DD' — avoids midnight edge cases
-  meal_slot:      MealSlot
   food_name:      string
   calories:       number
   protein_g:      number
@@ -139,7 +137,6 @@ export const useNutritionStore = create<NutritionState>((set, get) => ({
       id:           entry.id,
       user_id:      uid,
       logged_date:  entry.logged_date,
-      meal_slot:    entry.meal_slot,
       food_name:    entry.food_name,
       calories:     Math.round(Number(entry.calories)),
       protein_g:    Math.round(Number(entry.protein_g)),

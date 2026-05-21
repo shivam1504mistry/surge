@@ -49,17 +49,7 @@ import FoodSearchModal, { FoodLogPayload } from '../../components/FoodSearchModa
 import ImageFoodModal from '../../components/ImageFoodModal'
 import FoodConfirmModal, { ConfirmDish, dishesToParsedFoods } from '../../components/FoodConfirmModal'
 import { useNutritionStore } from '../../stores/nutritionStore'
-import { MealSlot } from '../../stores/nutritionStore'
 import { track } from '../../lib/analytics'
-
-/** Auto-detect meal slot from current time of day when GPT doesn't specify one */
-function mealSlotFromTime(): MealSlot {
-  const h = new Date().getHours()
-  if (h >= 5  && h < 11) return 'breakfast'
-  if (h >= 11 && h < 15) return 'lunch'
-  if (h >= 15 && h < 19) return 'snacks'
-  return 'dinner'
-}
 
 // ---------------------------------------------------------------------------
 // Exercise types + local fallback (used by manual log modal)
@@ -469,7 +459,6 @@ export default function TodayScreen() {
           for (const food of foods) {
             const entry = {
               logged_date:  today,
-              meal_slot:    (food.meal_slot as MealSlot) || mealSlotFromTime(),
               food_name:    food.name,
               calories:     food.calories,
               protein_g:    food.protein_g,
@@ -670,7 +659,6 @@ export default function TodayScreen() {
       {/* ── Food search modal ── */}
       <FoodSearchModal
         visible={showFood}
-        initialSlot="breakfast"
         onClose={() => setShowFood(false)}
         onSave={handleSaveFood}
       />
@@ -707,7 +695,6 @@ export default function TodayScreen() {
           for (const food of foods) {
             const entry = {
               logged_date:  todayStr,
-              meal_slot:    (food.meal_slot as MealSlot) || mealSlotFromTime(),
               food_name:    food.name,
               calories:     food.calories,
               protein_g:    food.protein_g,

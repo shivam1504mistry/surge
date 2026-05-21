@@ -6,7 +6,7 @@
  */
 import * as Print from 'expo-print'
 import { supabase } from './supabase'
-import { buildDayHTML, buildMultiDayHTML, ReportDay, ReportMeal, ReportExercise } from './reportTemplate'
+import { buildDayHTML, buildMultiDayHTML, ReportDay, ReportFoodItem, ReportExercise } from './reportTemplate'
 
 // App download link — Android APK (EAS preview build)
 export const APP_DOWNLOAD_LINK = 'https://expo.dev/accounts/shivam1504mistry/projects/surge/builds/ad01b2eb-7f53-4d02-b33b-e2d710fbb4dd'
@@ -61,7 +61,7 @@ export function daysAgoISO(n: number): string {
 async function fetchDayData(userId: string, isoDate: string): Promise<{
   exercises: ReportExercise[]
   sessionName?: string
-  meals: ReportMeal[]
+  foodItems: ReportFoodItem[]
   totals: { calories: number; protein_g: number; carbs_g: number; fat_g: number }
 }> {
   const dayStart = new Date(`${isoDate}T00:00:00`)
@@ -100,10 +100,10 @@ async function fetchDayData(userId: string, isoDate: string): Promise<{
     }
   }
 
-  // Fetch food entries
+  // Fetch food entries (chronological order)
   const { data: foodEntries, error: foodError } = await supabase
     .from('food_entries')
-    .select('meal_slot, food_name, serving_size, serving_unit, calories, protein_g, carbs_g, fat_g')
+    .select('food_name, serving_size, serving_unit, calories, protein_g, carbs_g, fat_g')
     .eq('user_id', userId)
     .eq('logged_date', isoDate)
     .order('logged_at')
@@ -112,17 +112,11 @@ async function fetchDayData(userId: string, isoDate: string): Promise<{
   console.log(`[Report] foodEntries=${JSON.stringify(foodEntries)} error=${foodError?.message}`)
   console.log(`[Report] exercises=${exercises.length}`)
 
-  const SLOTS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const
-  const meals: ReportMeal[] = SLOTS.map(slot => ({
-    slot,
-    items: (foodEntries ?? [])
-      .filter(f => f.meal_slot === slot)
-      .map(f => ({
-        food_name:    f.food_name,
-        serving_size: f.serving_size,
-        serving_unit: f.serving_unit,
-        calories:     Math.round(f.calories),
-      })),
+  const foodItems: ReportFoodItem[] = (foodEntries ?? []).map(f => ({
+    food_name:    f.food_name,
+    serving_size: f.serving_size,
+    serving_unit: f.serving_unit,
+    calories:     Math.round(f.calories),
   }))
 
   const totals = (foodEntries ?? []).reduce(
@@ -135,7 +129,7 @@ async function fetchDayData(userId: string, isoDate: string): Promise<{
     { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
   )
 
-  return { exercises, sessionName, meals, totals }
+  return { exercises, sessionName, foodItems, totals }
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +189,7 @@ export async function generateReports(opts: GenerateOptions): Promise<GeneratedP
       protein_target_g: opts.profile.protein_target_g,
       carbs_target_g:   opts.profile.carbs_target_g,
       fat_target_g:     opts.profile.fat_target_g,
-      meals:            dayData.meals,
+      foodItems:        dayData.foodItems,
       sessionName:      dayData.sessionName,
       exercises:        dayData.exercises,
     })

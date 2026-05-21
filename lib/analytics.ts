@@ -31,6 +31,8 @@ export type AnalyticsEvent =
   | 'onboarding_goals_selected'
   | 'onboarding_experience_viewed'
   | 'onboarding_experience_selected'
+  | 'onboarding_food_units_viewed'
+  | 'onboarding_food_units_selected'
   | 'onboarding_accountability_viewed'
   | 'onboarding_complete'
   // Today screen

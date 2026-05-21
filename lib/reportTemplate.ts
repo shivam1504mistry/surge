@@ -22,11 +22,6 @@ export interface ReportFoodItem {
   calories:     number
 }
 
-export interface ReportMeal {
-  slot:  string
-  items: ReportFoodItem[]
-}
-
 export interface ReportDay {
   date:          string          // display string e.g. "Friday, 18 Apr 2026"
   athleteName:   string
@@ -44,7 +39,7 @@ export interface ReportDay {
   protein_target_g: number
   carbs_target_g:   number
   fat_target_g:     number
-  meals:            ReportMeal[]
+  foodItems:        ReportFoodItem[]
 
   // Workout (may be empty if rest day)
   sessionName?: string
@@ -74,25 +69,19 @@ function buildDayBody(day: ReportDay, generatedAt: string, isLast: boolean): str
   const carbsPct      = pct(day.carbs_g,    day.carbs_target_g)
   const fatPct        = pct(day.fat_g,      day.fat_target_g)
 
-  const mealsHTML = day.meals.map(meal => {
-    if (!meal.items.length) return ''
-    const itemsHTML = meal.items.map(item => `
-      <div class="food-item">
-        <div>
-          <div class="food-name">${item.food_name}</div>
-          <div class="food-serving">${item.serving_size} ${item.serving_unit}</div>
+  const mealsHTML = day.foodItems.length === 0 ? '' : `
+    <div class="meal">
+      ${day.foodItems.map(item => `
+        <div class="food-item">
+          <div>
+            <div class="food-name">${item.food_name}</div>
+            <div class="food-serving">${item.serving_size} ${item.serving_unit}</div>
+          </div>
+          <div class="food-cals">${item.calories} kcal</div>
         </div>
-        <div class="food-cals">${item.calories} kcal</div>
-      </div>
-    `).join('')
-    const label = meal.slot.charAt(0).toUpperCase() + meal.slot.slice(1)
-    return `
-      <div class="meal">
-        <div class="meal-slot">${label}</div>
-        ${itemsHTML}
-      </div>
-    `
-  }).join('')
+      `).join('')}
+    </div>
+  `
 
   const exercisesHTML = day.exercises.map(ex => {
     const setsHTML = ex.sets.map((s: any) => {
@@ -124,7 +113,7 @@ function buildDayBody(day: ReportDay, generatedAt: string, isLast: boolean): str
     </div>
   `
 
-  const noNutrition = day.calories === 0 && day.meals.every(m => m.items.length === 0)
+  const noNutrition = day.calories === 0 && day.foodItems.length === 0
 
   const nutritionSection = noNutrition ? `
     <div class="section">

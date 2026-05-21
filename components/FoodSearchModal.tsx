@@ -14,7 +14,6 @@ import {
   Alert,
 } from 'react-native'
 import { Colors, FontSize, FontWeight, Radius, Spacing } from '../constants/theme'
-import { MealSlot } from '../stores/nutritionStore'
 import { track } from '../lib/analytics'
 
 // ---------------------------------------------------------------------------
@@ -148,29 +147,20 @@ export interface FoodLogPayload {
   fat_g:        number
   serving_size: number
   serving_unit: string
-  meal_slot:    MealSlot
   off_food_id?: string
   source:       'search' | 'barcode'
 }
 
 interface Props {
-  visible:     boolean
-  initialSlot: MealSlot
-  onClose:     () => void
-  onSave:      (payload: FoodLogPayload) => void
+  visible: boolean
+  onClose: () => void
+  onSave:  (payload: FoodLogPayload) => void
 }
 
 // ---------------------------------------------------------------------------
 // Serving units
 // ---------------------------------------------------------------------------
 const UNITS = ['g', 'ml', 'piece', 'katori', 'roti', 'cup', 'tbsp', 'tsp']
-const MEAL_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snacks']
-const SLOT_EMOJI: Record<MealSlot, string> = {
-  breakfast: '🌅',
-  lunch:     '☀️',
-  dinner:    '🌙',
-  snacks:    '🍎',
-}
 
 // ---------------------------------------------------------------------------
 // Sub-screens
@@ -180,7 +170,7 @@ type Screen = 'search' | 'barcode' | 'form'
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
-export default function FoodSearchModal({ visible, initialSlot, onClose, onSave }: Props) {
+export default function FoodSearchModal({ visible, onClose, onSave }: Props) {
   const [screen, setScreen]           = useState<Screen>('search')
   const [query, setQuery]             = useState('')
   const [results, setResults]         = useState<NormalisedFood[]>([])
@@ -188,7 +178,6 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
   const [selected, setSelected]       = useState<NormalisedFood | null>(null)
   const [servingSize, setServingSize] = useState('100')
   const [servingUnit, setServingUnit] = useState('g')
-  const [mealSlot, setMealSlot]       = useState<MealSlot>(initialSlot)
   const searchTimeout                 = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Camera permissions (only used if expo-camera is installed)
@@ -206,9 +195,8 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
       setSelected(null)
       setServingSize('100')
       setServingUnit('g')
-      setMealSlot(initialSlot)
     }
-  }, [visible, initialSlot])
+  }, [visible])
 
   // -------------------------------------------------------------------------
   // Search with 500ms debounce
@@ -326,7 +314,6 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
       fat_g:        computedMacros.fat_g,
       serving_size: size,
       serving_unit: servingUnit,
-      meal_slot:    mealSlot,
       off_food_id:  selected.off_food_id,
       source:       screen === 'barcode' ? 'barcode' : 'search',
     })
@@ -389,7 +376,7 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
   }
 
   // -------------------------------------------------------------------------
-  // Form screen (serving size + meal slot + save)
+  // Form screen (serving size + save)
   // -------------------------------------------------------------------------
   const renderFormScreen = () => (
     <ScrollView contentContainerStyle={styles.formScroll} keyboardShouldPersistTaps="handled">
@@ -433,23 +420,6 @@ export default function FoodSearchModal({ visible, initialSlot, onClose, onSave 
             ))}
           </View>
         </ScrollView>
-      </View>
-
-      {/* Meal slot */}
-      <Text style={styles.fieldLabel}>Meal</Text>
-      <View style={styles.slotRow}>
-        {MEAL_SLOTS.map((slot) => (
-          <TouchableOpacity
-            key={slot}
-            style={[styles.slotChip, mealSlot === slot && styles.slotChipActive]}
-            onPress={() => setMealSlot(slot)}
-          >
-            <Text style={styles.slotEmoji}>{SLOT_EMOJI[slot]}</Text>
-            <Text style={[styles.slotText, mealSlot === slot && styles.slotTextActive]}>
-              {slot.charAt(0).toUpperCase() + slot.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
 
       {/* Actions */}
@@ -755,37 +725,6 @@ const styles = StyleSheet.create({
     color:      Colors.accent,
     fontWeight: '600',
   },
-  slotRow: {
-    flexDirection: 'row',
-    gap:           Spacing.sm,
-    flexWrap:      'wrap',
-  },
-  slotChip: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    gap:             Spacing.xs,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius:    Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth:     1,
-    borderColor:     Colors.border,
-  },
-  slotChipActive: {
-    backgroundColor: Colors.accentSoft,
-    borderColor:     Colors.accent,
-  },
-  slotEmoji: { fontSize: 16 },
-  slotText: {
-    fontSize: FontSize.sm,
-    color:    Colors.text2,
-    fontWeight: '500',
-  },
-  slotTextActive: {
-    color: Colors.accent,
-    fontWeight: '700',
-  },
-
   // Barcode screen
   barcodeOverlay: {
     position:       'absolute',
