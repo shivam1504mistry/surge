@@ -45,6 +45,16 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <key>NSCameraUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your camera</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to save photos</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your photos</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
@@ -67,14 +77,6 @@
       <string>UIInterfaceOrientationLandscapeLeft</string>
       <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
-    <key>NSCameraUsageDescription</key>
-    <string>Surge uses your camera to log food by photo.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Surge uses your microphone to log workouts and food by voice.</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Surge saves your share cards to your photo library.</string>
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>Surge saves your share cards to your photo library.</string>
     <key>UIUserInterfaceStyle</key>
     <string>Light</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
