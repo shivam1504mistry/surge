@@ -104,16 +104,15 @@ export function useVoiceLog() {
           ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
           android: {
             ...Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
-            bitRateEncoding: 64000,
+            bitRate: 64000,
             sampleRate: 16000,
             numberOfChannels: 1,
           },
           ios: {
             ...Audio.RecordingOptionsPresets.HIGH_QUALITY.ios,
-            bitRateStrategy: Audio.BitRateStrategy?.VARIABLE ?? 1,
+            bitRate: 64000,
             sampleRate: 16000,
             numberOfChannels: 1,
-            linearPCMBitDepth: 16,
           },
         })
         recording.current = rec
