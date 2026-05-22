@@ -100,9 +100,22 @@ export function useVoiceLog() {
       }
 
       try {
-        const { recording: rec } = await Audio.Recording.createAsync(
-          Audio.RecordingOptionsPresets.HIGH_QUALITY
-        )
+        const { recording: rec } = await Audio.Recording.createAsync({
+          ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+          android: {
+            ...Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
+            bitRateEncoding: 64000,
+            sampleRate: 16000,
+            numberOfChannels: 1,
+          },
+          ios: {
+            ...Audio.RecordingOptionsPresets.HIGH_QUALITY.ios,
+            bitRateStrategy: Audio.BitRateStrategy?.VARIABLE ?? 1,
+            sampleRate: 16000,
+            numberOfChannels: 1,
+            linearPCMBitDepth: 16,
+          },
+        })
         recording.current = rec
         setIsRecording(true)
         console.log('[useVoiceLog] recording started OK')
@@ -145,6 +158,9 @@ export function useVoiceLog() {
       const SUPABASE_URL      = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''
       const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 90000)
+
       const fnResponse = await fetch(`${SUPABASE_URL}/functions/v1/parse-voice`, {
         method:  'POST',
         headers: {
@@ -153,7 +169,10 @@ export function useVoiceLog() {
           'apikey':        SUPABASE_ANON_KEY,
         },
         body: JSON.stringify({ audio: base64, mimeType: 'audio/m4a', food_unit_pref: foodUnitPref, localHour: new Date().getHours() }),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       const data = await fnResponse.json()
 
