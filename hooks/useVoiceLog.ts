@@ -145,27 +145,29 @@ export function useVoiceLog() {
       const SUPABASE_URL      = process.env.EXPO_PUBLIC_SUPABASE_URL ?? ''
       const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 90000)
-
-      const fnResponse = await fetch(`${SUPABASE_URL}/functions/v1/parse-voice`, {
-        method:  'POST',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'apikey':        SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({ audio: base64, mimeType: 'audio/m4a', food_unit_pref: foodUnitPref, localHour: new Date().getHours() }),
-        signal: controller.signal,
+      const data: any = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', `${SUPABASE_URL}/functions/v1/parse-voice`)
+        xhr.setRequestHeader('Content-Type', 'application/json')
+        xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_ANON_KEY}`)
+        xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY)
+        xhr.timeout = 90000
+        xhr.onload = () => {
+          try {
+            const parsed = JSON.parse(xhr.responseText)
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(parsed)
+            } else {
+              reject(new Error(parsed?.error ?? 'Function error'))
+            }
+          } catch {
+            reject(new Error('Could not parse response'))
+          }
+        }
+        xhr.onerror = () => reject(new Error('Network request failed — check your connection'))
+        xhr.ontimeout = () => reject(new Error('Request timed out — try a shorter voice note'))
+        xhr.send(JSON.stringify({ audio: base64, mimeType: 'audio/m4a', food_unit_pref: foodUnitPref, localHour: new Date().getHours() }))
       })
-
-      clearTimeout(timeoutId)
-
-      const data = await fnResponse.json()
-
-      if (!fnResponse.ok) {
-        throw new Error(data?.error ?? 'Function error')
-      }
 
       const exercises = data.exercises ?? []
       const foods     = data.foods     ?? []
