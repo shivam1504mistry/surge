@@ -5,4 +5,4 @@ node_modules/
 dist/
 .DS_Store
 android/app/src/main/assets/
-supabase/.temp/linked-project.json
+supabase/.temp/
