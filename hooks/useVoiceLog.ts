@@ -100,21 +100,9 @@ export function useVoiceLog() {
       }
 
       try {
-        const { recording: rec } = await Audio.Recording.createAsync({
-          ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
-          android: {
-            ...Audio.RecordingOptionsPresets.HIGH_QUALITY.android,
-            bitRate: 64000,
-            sampleRate: 16000,
-            numberOfChannels: 1,
-          },
-          ios: {
-            ...Audio.RecordingOptionsPresets.HIGH_QUALITY.ios,
-            bitRate: 64000,
-            sampleRate: 16000,
-            numberOfChannels: 1,
-          },
-        })
+        const { recording: rec } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        )
         recording.current = rec
         setIsRecording(true)
         console.log('[useVoiceLog] recording started OK')
