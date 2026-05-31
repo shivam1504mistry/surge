@@ -17,6 +17,7 @@ import {
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, FontSize, FontWeight, Radius, Spacing, BOTTOM_SAFE_PADDING } from '../../constants/theme'
+import { useNavigation } from '@react-navigation/native'
 import { useUserStore } from '../../stores/userStore'
 import { supabase } from '../../lib/supabase'
 import SupportButton from '../../components/SupportButton'
@@ -35,7 +36,8 @@ const GOAL_OPTIONS: Goal[] = ['fat_loss', 'muscle_gain', 'recomp', 'maintain', '
 
 export default function ProfileScreen() {
   const { profile, setProfile } = useUserStore()
-  const insets = useSafeAreaInsets()
+  const insets     = useSafeAreaInsets()
+  const navigation = useNavigation<any>()
 
   const [showEdit, setShowEdit]   = useState(false)
   const [saving,   setSaving]     = useState(false)
@@ -154,6 +156,20 @@ export default function ProfileScreen() {
             </View>
           </View>
         )}
+
+        {/* ── Referrals ── */}
+        <TouchableOpacity
+          style={styles.referralCard}
+          onPress={() => navigation.navigate('Referrals')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.referralIcon}>🎁</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.referralTitle}>Referrals</Text>
+            <Text style={styles.referralSub}>Invite friends &amp; win rewards</Text>
+          </View>
+          <Text style={styles.referralArrow}>›</Text>
+        </TouchableOpacity>
 
         {/* ── Account ── */}
         <View style={styles.section}>
@@ -327,6 +343,21 @@ const styles = StyleSheet.create({
     justifyContent:  'center',
   },
   signOutText: { fontSize: FontSize.base, color: Colors.text2, fontWeight: FontWeight.medium },
+
+  referralCard: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             Spacing.md,
+    backgroundColor: Colors.surface,
+    borderRadius:    Radius.lg,
+    borderWidth:     1,
+    borderColor:     Colors.accent + '50',
+    padding:         Spacing.md,
+  },
+  referralIcon:  { fontSize: 24 },
+  referralTitle: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.text1 },
+  referralSub:   { fontSize: FontSize.sm, color: Colors.text2, marginTop: 2 },
+  referralArrow: { fontSize: 20, color: Colors.accent },
 
   // Modal
   modalSafe: { flex: 1, backgroundColor: Colors.bg },

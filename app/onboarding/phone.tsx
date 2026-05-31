@@ -22,6 +22,7 @@ import { Colors, FontSize, FontWeight, Radius, Spacing } from '../../constants/t
 import { signInWithGoogle, sendOTP } from '../../lib/supabase'
 import { useNavigation } from '@react-navigation/native'
 import { track } from '../../lib/analytics'
+import { useUserStore } from '../../stores/userStore'
 
 const { height: SCREEN_H } = Dimensions.get('window')
 const CARD_HEIGHT = SCREEN_H * 0.52
@@ -53,11 +54,15 @@ const CVP_ITEMS = [
 export default function WelcomeScreen() {
   const navigation = useNavigation<any>()
   const [mode,        setMode]       = useState<Mode>('landing')
-  const [phone,       setPhone]      = useState('')
-  const [loading,     setLoading]    = useState(false)
-  const [cvpIndex,    setCvpIndex]   = useState(0)
-  const [country,     setCountry]    = useState<Country>(COUNTRIES[0])  // India default
-  const [showPicker,  setShowPicker] = useState(false)
+  const [phone,         setPhone]        = useState('')
+  const [loading,       setLoading]      = useState(false)
+  const [cvpIndex,      setCvpIndex]     = useState(0)
+  const [country,       setCountry]      = useState<Country>(COUNTRIES[0])  // India default
+  const [showPicker,    setShowPicker]   = useState(false)
+  const [referralCode,  setReferralCode] = useState('')
+  const [codeValid,     setCodeValid]    = useState<boolean | null>(null)
+
+  const setPendingReferralCode = useUserStore((s) => s.setPendingReferralCode)
 
   // Orb breathe animation
   const orbScale   = useRef(new Animated.Value(1)).current
@@ -180,6 +185,8 @@ export default function WelcomeScreen() {
     try {
       const { error } = await sendOTP(formatted)
       if (error) throw error
+      const trimmed = referralCode.trim().toUpperCase()
+      setPendingReferralCode(trimmed || null)
       navigation.navigate('OTP', { phone: formatted })
     } catch (err: any) {
       Alert.alert('Failed to send OTP', err.message ?? 'Please try again.')
@@ -281,6 +288,17 @@ export default function WelcomeScreen() {
                   autoFocus
                 />
               </View>
+
+              <TextInput
+                style={[styles.phoneInput, styles.referralInput, codeValid === false && styles.referralInputInvalid, codeValid === true && styles.referralInputValid]}
+                value={referralCode}
+                onChangeText={(t) => { setReferralCode(t); setCodeValid(null) }}
+                placeholder="Referral code (optional)"
+                placeholderTextColor={Colors.text3}
+                autoCapitalize="characters"
+                returnKeyType="done"
+                maxLength={10}
+              />
 
               <TouchableOpacity
                 style={[styles.sendOTPBtn, loading && styles.btnDisabled]}
@@ -622,4 +640,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
   },
+  referralInput: {
+    marginTop:        Spacing.xs,
+    backgroundColor:  Colors.surface,
+    borderRadius:     Radius.md,
+    height:           48,
+    paddingHorizontal: Spacing.md,
+    fontSize:         FontSize.base,
+    color:            Colors.text1,
+    borderWidth:      1,
+    borderColor:      Colors.border,
+    width:            '100%',
+  },
+  referralInputValid:   { borderColor: Colors.green },
+  referralInputInvalid: { borderColor: Colors.accent },
 })

@@ -59,8 +59,10 @@ const FREQ_OPTIONS: { value: Freq; label: string; desc: string }[] = [
 export default function AccountabilityScreen() {
   const route    = useRoute<RouteProp<RootParamList, 'Accountability'>>()
   const params   = route.params
-  const setProfile = useUserStore((s) => s.setProfile)
-  const session    = useUserStore((s) => s.session)
+  const setProfile             = useUserStore((s) => s.setProfile)
+  const session                = useUserStore((s) => s.session)
+  const pendingReferralCode    = useUserStore((s) => s.pendingReferralCode)
+  const setPendingReferralCode = useUserStore((s) => s.setPendingReferralCode)
 
   const [saving, setSaving] = useState(false)
   const [accName,  setAccName]  = useState('')
@@ -78,11 +80,37 @@ export default function AccountabilityScreen() {
   const [carbsG,    setCarbsG]    = useState(String(defaultTargets.carbs_g))
   const [fatG,      setFatG]      = useState(String(defaultTargets.fat_g))
 
+  function generateReferralCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    let code = 'SURGE-'
+    for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)]
+    return code
+  }
+
+  async function getUniqueReferralCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = generateReferralCode()
+      const { data } = await supabase.from('users').select('id').eq('referral_code', code).maybeSingle()
+      if (!data) return code
+    }
+    return generateReferralCode()
+  }
+
   async function handleFinish() {
     setSaving(true)
     try {
       const user = session?.user
       if (!user) throw new Error('Not authenticated')
+
+      const referralCode = await getUniqueReferralCode()
+
+      // Validate referred_by code — look up the referrer
+      let referrerId: string | null = null
+      if (pendingReferralCode) {
+        const { data: referrer } = await supabase
+          .from('users').select('id').eq('referral_code', pendingReferralCode).maybeSingle()
+        referrerId = referrer?.id ?? null
+      }
 
       const profileData = {
         id:               user.id,
@@ -103,13 +131,24 @@ export default function AccountabilityScreen() {
         carbs_target_g:   parseInt(carbsG)    || defaultTargets.carbs_g,
         fat_target_g:     parseInt(fatG)      || defaultTargets.fat_g,
         tier:             'free' as const,
+        referral_code:    referralCode,
+        referred_by:      pendingReferralCode ?? null,
       }
 
       const { error } = await supabase.from('users').upsert(profileData)
       if (error) throw error
 
+      // Log referral if a valid referrer was found
+      if (referrerId) {
+        await supabase.from('referrals').insert({
+          referrer_user_id: referrerId,
+          referred_user_id: user.id,
+        })
+      }
+
+      setPendingReferralCode(null)
       track('onboarding_complete', { goal: params.goal, experience: params.experience })
-      setProfile(profileData)
+      setProfile(profileData as any)
       // App.tsx detects profile != null → navigates to MainTabs
     } catch (err: any) {
       Alert.alert('Could not save profile', err.message ?? 'Please try again.')

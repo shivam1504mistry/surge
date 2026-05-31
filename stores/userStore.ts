@@ -30,16 +30,20 @@ export interface UserProfile {
   accountability_name?: string
   accountability_phone?:string
   accountability_freq?: 'daily' | 'weekly'
+  referral_code?:       string
+  referred_by?:         string | null
 }
 
 interface UserState {
-  session:    Session | null
-  profile:    UserProfile | null
-  isLoading:  boolean
-  setSession: (session: Session | null) => void
-  setProfile: (profile: UserProfile | null) => void
-  setLoading: (loading: boolean) => void
-  clearUser:  () => void
+  session:              Session | null
+  profile:              UserProfile | null
+  isLoading:            boolean
+  pendingReferralCode:  string | null
+  setSession:           (session: Session | null) => void
+  setProfile:           (profile: UserProfile | null) => void
+  setLoading:           (loading: boolean) => void
+  setPendingReferralCode: (code: string | null) => void
+  clearUser:            () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -48,12 +52,14 @@ interface UserState {
 // All other agents read only.
 // ---------------------------------------------------------------------------
 export const useUserStore = create<UserState>((set) => ({
-  session:    null,
-  profile:    null,
-  isLoading:  true,
+  session:             null,
+  profile:             null,
+  isLoading:           true,
+  pendingReferralCode: null,
 
-  setSession: (session) => set({ session }),
-  setProfile: (profile) => set({ profile }),
-  setLoading: (isLoading) => set({ isLoading }),
-  clearUser:  () => set({ session: null, profile: null }),
+  setSession:             (session)  => set({ session }),
+  setProfile:             (profile)  => set({ profile }),
+  setLoading:             (isLoading) => set({ isLoading }),
+  setPendingReferralCode: (code)     => set({ pendingReferralCode: code }),
+  clearUser:              ()         => set({ session: null, profile: null, pendingReferralCode: null }),
 }))

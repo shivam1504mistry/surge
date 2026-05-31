@@ -119,6 +119,7 @@ import TodayScreen from "./app/(tabs)/today";
 import HistoryScreen from "./app/(tabs)/history";
 import ProfileScreen from "./app/(tabs)/profile";
 import ShareScreen from "./app/share";
+import ReferralsScreen from "./app/referrals";
 
 // ---------------------------------------------------------------------------
 const Stack = createNativeStackNavigator();
@@ -288,6 +289,7 @@ function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg } }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="Share" component={ShareScreen} />
+      <Stack.Screen name="Referrals" component={ReferralsScreen} />
     </Stack.Navigator>
   )
 
@@ -346,6 +348,7 @@ function RootNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Colors.bg } }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen name="Share" component={ShareScreen} />
+      <Stack.Screen name="Referrals" component={ReferralsScreen} />
     </Stack.Navigator>
   );
 }

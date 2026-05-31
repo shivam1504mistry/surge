@@ -118,6 +118,11 @@ export type AnalyticsEvent =
   | 'pro_upsell_converted'
   | 'template_created'
   | 'template_used'
+  // Referrals
+  | 'screen_referrals'
+  | 'referral_share_tapped'
+  | 'referral_copy_tapped'
+  | 'referral_reward_enrolled'
 
 export function track(event: AnalyticsEvent, properties?: Record<string, any>) {
   try {
