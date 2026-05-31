@@ -290,7 +290,7 @@ export default function WelcomeScreen() {
               </View>
 
               <TextInput
-                style={[styles.phoneInput, styles.referralInput, codeValid === false && styles.referralInputInvalid, codeValid === true && styles.referralInputValid]}
+                style={[styles.referralInput, codeValid === false && styles.referralInputInvalid, codeValid === true && styles.referralInputValid]}
                 value={referralCode}
                 onChangeText={(t) => { setReferralCode(t); setCodeValid(null) }}
                 placeholder="Referral code (optional)"
