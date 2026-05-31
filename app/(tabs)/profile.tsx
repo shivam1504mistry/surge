@@ -163,7 +163,7 @@ export default function ProfileScreen() {
           onPress={() => navigation.navigate('Referrals')}
           activeOpacity={0.8}
         >
-          <Text style={styles.referralIcon}>🎁</Text>
+          <Text style={styles.referralIcon}>👥</Text>
           <View style={{ flex: 1 }}>
             <Text style={styles.referralTitle}>Referrals</Text>
             <Text style={styles.referralSub}>Invite friends &amp; win rewards</Text>

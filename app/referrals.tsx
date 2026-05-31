@@ -13,36 +13,116 @@ import { track } from '../lib/analytics'
 const BASE_LINK = 'surge.app.link/r'
 
 type Reward = {
-  id:           string
-  title:        string
-  description:  string | null
-  image_url:    string | null
+  id:            string
+  title:         string
+  description:   string | null
+  image_url:     string | null
   announce_date: string | null
+  emoji?:        string | null
+  venue?:        string | null
+  match_time?:   string | null
 }
+
+function RewardCardBanner({ reward }: { reward: Reward }) {
+  const isCricket = reward.title.toLowerCase().includes('odi') ||
+    reward.title.toLowerCase().includes('cricket') ||
+    reward.title.toLowerCase().includes('ind vs') ||
+    reward.title.toLowerCase().includes('india vs')
+
+  if (isCricket) {
+    return (
+      <View style={bannerStyles.cricketBanner}>
+        <View style={bannerStyles.cricketTop}>
+          <View style={bannerStyles.teamBlock}>
+            <Text style={bannerStyles.flag}>🇮🇳</Text>
+            <Text style={bannerStyles.teamName}>India</Text>
+          </View>
+          <View style={bannerStyles.vsBlock}>
+            <Text style={bannerStyles.vs}>VS</Text>
+            <Text style={bannerStyles.matchType}>3rd ODI · Day/Night</Text>
+          </View>
+          <View style={bannerStyles.teamBlock}>
+            <Text style={bannerStyles.flag}>🇦🇫</Text>
+            <Text style={bannerStyles.teamName}>Afghanistan</Text>
+          </View>
+        </View>
+        <View style={bannerStyles.cricketBottom}>
+          <Text style={bannerStyles.venue}>🏟 M.A. Chidambaram Stadium, Chennai</Text>
+          <Text style={bannerStyles.matchDate}>📅 June 20, 2026 · 1:30 PM IST</Text>
+        </View>
+      </View>
+    )
+  }
+
+  return (
+    <View style={bannerStyles.defaultBanner}>
+      <Text style={bannerStyles.defaultEmoji}>{reward.emoji ?? '⚡'}</Text>
+    </View>
+  )
+}
+
+const bannerStyles = StyleSheet.create({
+  cricketBanner: {
+    backgroundColor: '#0a1628',
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e3a5f',
+  },
+  cricketTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  teamBlock: { alignItems: 'center', gap: 4, flex: 1 },
+  flag:      { fontSize: 32 },
+  teamName:  { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: '#fff' },
+  vsBlock:   { alignItems: 'center', gap: 2, flex: 1 },
+  vs:        { fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.accent, letterSpacing: 2 },
+  matchType: { fontSize: 9, color: '#5a8fc4', fontWeight: FontWeight.semibold, textTransform: 'uppercase', letterSpacing: 1 },
+  cricketBottom: { borderTopWidth: 1, borderTopColor: '#1e3a5f', paddingTop: Spacing.sm, gap: 3 },
+  venue:     { fontSize: FontSize.xs, color: '#8ab4d4' },
+  matchDate: { fontSize: FontSize.xs, color: '#8ab4d4' },
+  defaultBanner: {
+    height: 100, backgroundColor: '#1a1a2e',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  defaultEmoji: { fontSize: 36 },
+})
 
 export default function ReferralsScreen() {
   const navigation = useNavigation()
   const profile    = useUserStore((s) => s.profile)
 
-  const [rewards,      setRewards]      = useState<Reward[]>([])
-  const [enrolled,     setEnrolled]     = useState<Set<string>>(new Set())
-  const [enrolling,    setEnrolling]    = useState<string | null>(null)
-  const [loading,      setLoading]      = useState(true)
-  const [copied,       setCopied]       = useState(false)
+  const [rewards,   setRewards]   = useState<Reward[]>([])
+  const [enrolled,  setEnrolled]  = useState<Set<string>>(new Set())
+  const [enrolling, setEnrolling] = useState<string | null>(null)
+  const [loading,   setLoading]   = useState(true)
+  const [copied,    setCopied]    = useState(false)
 
-  const referralCode = profile?.referral_code as string | undefined
-  const inviteLink   = referralCode ? `${BASE_LINK}/${referralCode}` : null
+  const [referralCode, setReferralCode] = useState<string | undefined>(profile?.referral_code)
+  const inviteLink = referralCode ? `${BASE_LINK}/${referralCode}` : null
 
   useEffect(() => {
     track('screen_referrals')
     loadRewards()
+    if (!profile?.referral_code) ensureReferralCode()
   }, [])
+
+  async function ensureReferralCode() {
+    if (!profile?.id) return
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    let code = 'SURGE-'
+    for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)]
+    const { error } = await supabase.from('users').update({ referral_code: code }).eq('id', profile.id)
+    if (!error) setReferralCode(code)
+  }
 
   const loadRewards = useCallback(async () => {
     if (!profile?.id) return
     setLoading(true)
     try {
-      // Load assigned rewards for this user
       const { data: assignments } = await supabase
         .from('reward_assignments')
         .select('reward_id, referral_rewards(id, title, description, image_url, announce_date)')
@@ -51,20 +131,17 @@ export default function ReferralsScreen() {
       const rewardList: Reward[] = (assignments ?? [])
         .map((a: any) => a.referral_rewards)
         .filter(Boolean)
-        .filter((r: any) => r !== null)
 
       setRewards(rewardList)
 
-      // Load enrollments
       const { data: enrollments } = await supabase
         .from('reward_enrollments')
         .select('reward_id')
         .eq('user_id', profile.id)
 
-      const enrolledSet = new Set<string>((enrollments ?? []).map((e: any) => e.reward_id))
-      setEnrolled(enrolledSet)
-    } catch (err) {
-      // Silent — empty state shown
+      setEnrolled(new Set<string>((enrollments ?? []).map((e: any) => e.reward_id)))
+    } catch {
+      // silent — empty state shown
     } finally {
       setLoading(false)
     }
@@ -110,18 +187,17 @@ export default function ReferralsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>🎁 Referrals</Text>
+        <Text style={styles.headerTitle}>👥 Referrals</Text>
         <View style={{ width: 60 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        {/* Your invite link card */}
+        {/* Invite link card */}
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Your invite link</Text>
           {referralCode ? (
@@ -142,21 +218,19 @@ export default function ReferralsScreen() {
               </View>
             </>
           ) : (
-            <Text style={styles.noCodeText}>Complete your profile to get a referral code.</Text>
+            <ActivityIndicator color={Colors.accent} />
           )}
         </View>
 
-        {/* Divider */}
         <View style={styles.divider} />
 
-        {/* Rewards section */}
         <Text style={styles.sectionTitle}>Rewards you can win</Text>
 
         {loading ? (
           <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.xl }} />
         ) : rewards.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🎁</Text>
+            <Text style={styles.emptyIcon}>👥</Text>
             <Text style={styles.emptyTitle}>Keep referring friends</Text>
             <Text style={styles.emptySub}>
               Rewards will appear here once you're assigned.{'\n\n'}
@@ -169,16 +243,16 @@ export default function ReferralsScreen() {
             const isEnrolling = enrolling === reward.id
             return (
               <View key={reward.id} style={styles.rewardCard}>
-                <View style={styles.rewardImagePlaceholder}>
-                  <Text style={styles.rewardImageEmoji}>🏆</Text>
-                </View>
+                <RewardCardBanner reward={reward} />
                 <View style={styles.rewardBody}>
-                  <Text style={styles.rewardTitle}>{reward.title}</Text>
+                  <View style={styles.rewardTitleRow}>
+                    <Text style={styles.rewardTitle}>{reward.title}</Text>
+                    <View style={styles.ticketBadge}>
+                      <Text style={styles.ticketBadgeText}>× 2 Tickets</Text>
+                    </View>
+                  </View>
                   {reward.description ? (
                     <Text style={styles.rewardDesc}>{reward.description}</Text>
-                  ) : null}
-                  {reward.announce_date ? (
-                    <Text style={styles.rewardDate}>🗓 Announced: {reward.announce_date}</Text>
                   ) : null}
                   <TouchableOpacity
                     style={[styles.enrollBtn, isEnrolled && styles.enrollBtnDone]}
@@ -188,9 +262,14 @@ export default function ReferralsScreen() {
                   >
                     {isEnrolling
                       ? <ActivityIndicator color="#fff" size="small" />
-                      : <Text style={styles.enrollBtnText}>{isEnrolled ? '✓ Enrolled' : 'Enroll'}</Text>
+                      : <Text style={styles.enrollBtnText}>
+                          {isEnrolled ? '✓ You\'re in the draw!' : '🏏 Enter the draw'}
+                        </Text>
                     }
                   </TouchableOpacity>
+                  {isEnrolled && (
+                    <Text style={styles.enrolledNote}>Winner announced after the series. Best of luck! ⚡</Text>
+                  )}
                 </View>
               </View>
             )
@@ -202,15 +281,11 @@ export default function ReferralsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: Colors.bg },
-  header:  {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.md,
-    paddingVertical:   Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+  safe:   { flex: 1, backgroundColor: Colors.bg },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
+    borderBottomWidth: 1, borderBottomColor: Colors.border,
   },
   backBtn:     { padding: Spacing.xs, minWidth: 60 },
   backText:    { fontSize: FontSize.base, color: Colors.accent, fontWeight: FontWeight.semibold },
@@ -219,42 +294,28 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.md, gap: Spacing.md, paddingBottom: 48 },
 
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius:    Radius.lg,
-    borderWidth:     1,
-    borderColor:     Colors.border,
-    padding:         Spacing.md,
-    gap:             Spacing.sm,
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, gap: Spacing.sm,
   },
   cardLabel: { fontSize: FontSize.sm, color: Colors.text2, fontWeight: FontWeight.semibold, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   codePill: {
-    backgroundColor: Colors.accentSoft,
-    borderWidth:     1,
-    borderColor:     Colors.accent,
-    borderRadius:    Radius.md,
-    paddingVertical:   Spacing.sm,
-    alignItems:        'center',
+    backgroundColor: Colors.accentSoft, borderWidth: 1, borderColor: Colors.accent,
+    borderRadius: Radius.md, paddingVertical: Spacing.sm, alignItems: 'center',
   },
   codeText: { fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.accent, letterSpacing: 3 },
 
   linkPill: {
-    backgroundColor: Colors.bg,
-    borderWidth:     1,
-    borderColor:     Colors.border,
-    borderRadius:    Radius.md,
-    paddingVertical:   10,
-    paddingHorizontal: Spacing.md,
+    backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: Spacing.md,
   },
   linkText: { fontSize: FontSize.sm, color: Colors.text2 },
 
-  btnRow:          { flexDirection: 'row', gap: Spacing.sm },
-  btnPrimary:      { flex: 1, backgroundColor: Colors.accent, borderRadius: Radius.md, height: 44, alignItems: 'center', justifyContent: 'center' },
-  btnPrimaryText:  { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: '#fff' },
-  btnSecondary:    { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
-  btnSecondaryText:{ fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.text1 },
-
-  noCodeText: { fontSize: FontSize.sm, color: Colors.text3, textAlign: 'center', paddingVertical: Spacing.sm },
+  btnRow:           { flexDirection: 'row', gap: Spacing.sm },
+  btnPrimary:       { flex: 1, backgroundColor: Colors.accent, borderRadius: Radius.md, height: 44, alignItems: 'center', justifyContent: 'center' },
+  btnPrimaryText:   { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: '#fff' },
+  btnSecondary:     { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, height: 44, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: Colors.border },
+  btnSecondaryText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.text1 },
 
   divider:      { height: 1, backgroundColor: Colors.border },
   sectionTitle: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.text1 },
@@ -265,32 +326,27 @@ const styles = StyleSheet.create({
   emptySub:   { fontSize: FontSize.sm, color: Colors.text3, textAlign: 'center', lineHeight: 20 },
 
   rewardCard: {
-    backgroundColor: Colors.surface,
-    borderRadius:    Radius.lg,
-    borderWidth:     1,
-    borderColor:     Colors.border,
-    overflow:        'hidden',
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: '#1e3a5f', overflow: 'hidden',
   },
-  rewardImagePlaceholder: {
-    height:          100,
-    backgroundColor: '#1a1a2e',
-    alignItems:      'center',
-    justifyContent:  'center',
+  rewardBody:     { padding: Spacing.md, gap: Spacing.sm },
+  rewardTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  rewardTitle:    { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.text1, flex: 1 },
+
+  ticketBadge: {
+    backgroundColor: Colors.accentSoft, borderWidth: 1, borderColor: Colors.accent,
+    borderRadius: Radius.full, paddingHorizontal: Spacing.sm, paddingVertical: 3,
   },
-  rewardImageEmoji: { fontSize: 36 },
-  rewardBody:       { padding: Spacing.md, gap: Spacing.xs },
-  rewardTitle:      { fontSize: FontSize.md, fontWeight: FontWeight.bold, color: Colors.text1 },
-  rewardDesc:       { fontSize: FontSize.sm, color: Colors.text2, lineHeight: 18 },
-  rewardDate:       { fontSize: FontSize.xs, color: Colors.text3 },
+  ticketBadgeText: { fontSize: FontSize.xs, color: Colors.accent, fontWeight: FontWeight.bold },
+
+  rewardDesc: { fontSize: FontSize.sm, color: Colors.text2, lineHeight: 18 },
 
   enrollBtn: {
-    backgroundColor: Colors.accent,
-    borderRadius:    Radius.md,
-    height:          44,
-    alignItems:      'center',
-    justifyContent:  'center',
-    marginTop:       Spacing.xs,
+    backgroundColor: Colors.accent, borderRadius: Radius.md,
+    height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 2,
   },
-  enrollBtnDone:  { backgroundColor: Colors.green, opacity: 0.85 },
-  enrollBtnText:  { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: '#fff' },
+  enrollBtnDone: { backgroundColor: Colors.green },
+  enrollBtnText: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: '#fff' },
+
+  enrolledNote: { fontSize: FontSize.xs, color: Colors.text3, textAlign: 'center', lineHeight: 16 },
 })
