@@ -217,7 +217,7 @@ export default function WelcomeScreen() {
           <Animated.View style={[styles.logoContainer, { opacity: logoOpacity }]}>
             <Text style={styles.logoEmoji}>⚡</Text>
             <Text style={styles.appName}>SURGE</Text>
-            <Text style={styles.tagline}>Just say it. Surge logs it.</Text>
+            <Text style={styles.tagline}>The Fitness App That Listens!</Text>
           </Animated.View>
         </View>
 
@@ -383,9 +383,9 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize:      FontSize.base,
-    color:         Colors.text2,
-    fontWeight:    FontWeight.medium,
-    letterSpacing: 0.3,
+    color:         Colors.accent,
+    fontWeight:    FontWeight.semibold,
+    letterSpacing: 0.5,
     marginTop:     4,
   },
 
