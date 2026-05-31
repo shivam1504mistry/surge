@@ -94,6 +94,7 @@ const bannerStyles = StyleSheet.create({
 export default function ReferralsScreen() {
   const navigation = useNavigation()
   const profile    = useUserStore((s) => s.profile)
+  const setProfile = useUserStore((s) => s.setProfile)
 
   const [rewards,   setRewards]   = useState<Reward[]>([])
   const [enrolled,  setEnrolled]  = useState<Set<string>>(new Set())
@@ -107,16 +108,33 @@ export default function ReferralsScreen() {
   useEffect(() => {
     track('screen_referrals')
     loadRewards()
-    if (!profile?.referral_code) ensureReferralCode()
+    ensureReferralCode()
   }, [])
 
   async function ensureReferralCode() {
     if (!profile?.id) return
+
+    // Check DB first — user may already have a code from a prior session
+    const { data: existing } = await supabase
+      .from('users').select('referral_code').eq('id', profile.id).single()
+
+    if (existing?.referral_code) {
+      setReferralCode(existing.referral_code)
+      if (profile && !profile.referral_code) {
+        setProfile({ ...profile, referral_code: existing.referral_code })
+      }
+      return
+    }
+
+    // Generate a new one
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     let code = 'SURGE-'
     for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)]
     const { error } = await supabase.from('users').update({ referral_code: code }).eq('id', profile.id)
-    if (!error) setReferralCode(code)
+    if (!error) {
+      setReferralCode(code)
+      if (profile) setProfile({ ...profile, referral_code: code })
+    }
   }
 
   const loadRewards = useCallback(async () => {
@@ -200,7 +218,7 @@ export default function ReferralsScreen() {
         {/* Invite link card */}
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Your invite link</Text>
-          {referralCode ? (
+          {referralCode !== undefined ? (
             <>
               <View style={styles.codePill}>
                 <Text style={styles.codeText}>{referralCode}</Text>
