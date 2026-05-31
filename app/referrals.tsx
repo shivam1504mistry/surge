@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Share, ActivityIndicator, Alert,
+  Share, ActivityIndicator, Alert, Linking,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useNavigation } from '@react-navigation/native'
@@ -220,9 +220,6 @@ export default function ReferralsScreen() {
           <Text style={styles.cardLabel}>Your invite link</Text>
           {referralCode !== undefined ? (
             <>
-              <View style={styles.codePill}>
-                <Text style={styles.codeText}>{referralCode}</Text>
-              </View>
               <View style={styles.linkPill}>
                 <Text style={styles.linkText} numberOfLines={1}>{inviteLink}</Text>
               </View>
@@ -242,7 +239,7 @@ export default function ReferralsScreen() {
 
         <View style={styles.divider} />
 
-        <Text style={styles.sectionTitle}>Rewards you can win</Text>
+        <Text style={styles.sectionTitle}>Rewards to enroll</Text>
 
         {loading ? (
           <ActivityIndicator color={Colors.accent} style={{ marginTop: Spacing.xl }} />
@@ -272,6 +269,14 @@ export default function ReferralsScreen() {
                   {reward.description ? (
                     <Text style={styles.rewardDesc}>{reward.description}</Text>
                   ) : null}
+                  {reward.announce_date ? (
+                    <View style={styles.announceDateRow}>
+                      <Text style={styles.announceDateLabel}>🗓 Winner announced</Text>
+                      <Text style={styles.announceDateValue}>
+                        {new Date(reward.announce_date + 'T12:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </Text>
+                    </View>
+                  ) : null}
                   <TouchableOpacity
                     style={[styles.enrollBtn, isEnrolled && styles.enrollBtnDone]}
                     onPress={() => handleEnroll(reward.id)}
@@ -293,6 +298,29 @@ export default function ReferralsScreen() {
             )
           })
         )}
+        {/* Terms */}
+        <View style={styles.termsCard}>
+          <Text style={styles.termsTitle}>Referral Terms</Text>
+          {[
+            'The referred user must set up their account and log at least one meal and one workout.',
+            'Your number of draw entries = the number of friends you referred in the last 30 days.',
+            'The winner is drawn and announced live on Surge\'s Instagram channel.',
+            'You must follow @getsurge.ai on Instagram to be eligible.',
+          ].map((term, i) => (
+            <View key={i} style={styles.termRow}>
+              <Text style={styles.termNum}>{i + 1}.</Text>
+              <Text style={styles.termText}>{term}</Text>
+            </View>
+          ))}
+          <TouchableOpacity
+            style={styles.igBtn}
+            onPress={() => Linking.openURL('https://www.instagram.com/getsurge.ai/')}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.igBtnText}>📸 Follow @getsurge.ai on Instagram</Text>
+          </TouchableOpacity>
+        </View>
+
       </ScrollView>
     </SafeAreaView>
   )
@@ -316,12 +344,6 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, padding: Spacing.md, gap: Spacing.sm,
   },
   cardLabel: { fontSize: FontSize.sm, color: Colors.text2, fontWeight: FontWeight.semibold, textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  codePill: {
-    backgroundColor: Colors.accentSoft, borderWidth: 1, borderColor: Colors.accent,
-    borderRadius: Radius.md, paddingVertical: Spacing.sm, alignItems: 'center',
-  },
-  codeText: { fontSize: FontSize.xl, fontWeight: FontWeight.black, color: Colors.accent, letterSpacing: 3 },
 
   linkPill: {
     backgroundColor: Colors.bg, borderWidth: 1, borderColor: Colors.border,
@@ -367,4 +389,27 @@ const styles = StyleSheet.create({
   enrollBtnText: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: '#fff' },
 
   enrolledNote: { fontSize: FontSize.xs, color: Colors.text3, textAlign: 'center', lineHeight: 16 },
+
+  announceDateRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: Colors.bg, borderRadius: Radius.sm,
+    paddingHorizontal: Spacing.sm, paddingVertical: 6,
+  },
+  announceDateLabel: { fontSize: FontSize.xs, color: Colors.text3 },
+  announceDateValue: { fontSize: FontSize.xs, color: Colors.text2, fontWeight: FontWeight.semibold },
+
+  termsCard: {
+    backgroundColor: Colors.surface, borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: Colors.border,
+    padding: Spacing.md, gap: Spacing.sm, marginTop: Spacing.sm,
+  },
+  termsTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: Colors.text2, textTransform: 'uppercase', letterSpacing: 0.5 },
+  termRow:    { flexDirection: 'row', gap: Spacing.sm },
+  termNum:    { fontSize: FontSize.sm, color: Colors.text3, fontWeight: FontWeight.bold, minWidth: 16 },
+  termText:   { fontSize: FontSize.sm, color: Colors.text2, lineHeight: 20, flex: 1 },
+  igBtn: {
+    marginTop: Spacing.xs, borderWidth: 1, borderColor: Colors.border,
+    borderRadius: Radius.md, height: 44, alignItems: 'center', justifyContent: 'center',
+  },
+  igBtnText: { fontSize: FontSize.sm, color: Colors.text1, fontWeight: FontWeight.semibold },
 })
