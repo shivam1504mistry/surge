@@ -75,6 +75,12 @@
     <string>Surge saves your share cards to your photo library.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Surge saves your share cards to your photo library.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Surge uses the local network to connect to the development server.</string>
+    <key>NSBonjourServices</key>
+    <array>
+      <string>_http._tcp</string>
+    </array>
     <key>UIUserInterfaceStyle</key>
     <string>Light</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>

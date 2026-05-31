@@ -59,13 +59,27 @@ target 'surge' do
       :mac_catalyst_enabled => false,
       :ccache_enabled => ccache_enabled?(podfile_properties),
     )
-    # fmt consteval fix is applied directly in Pods/fmt/include/fmt/base.h
-    # (added __apple_build_version__ check to disable FMT_USE_CONSTEVAL on all Apple Clang)
-
-    # Disable Clang explicit modules — Xcode 26 beta breaks ExpoModulesCore header scanning
+    # Xcode 26 compatibility — disable consteval, explicit modules, fix jsi
     installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        config.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      target.build_configurations.each do |bc|
+        bc.build_settings['CLANG_ENABLE_EXPLICIT_MODULES'] = 'NO'
+        # Disable fmt consteval via preprocessor (cleanest Xcode 26 fix)
+        if ['fmt', 'RCT-Folly'].include?(target.name)
+          defs = bc.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
+          defs = [defs] if defs.is_a?(String)
+          defs << 'FMT_USE_CONSTEVAL=0' unless defs.include?('FMT_USE_CONSTEVAL=0')
+          bc.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
+        end
+      end
+    end
+
+    # Patch jsi.h — Xcode 26 Clang rejects non-const data() passed to snprintf
+    jsi_path = File.join(__dir__, '../node_modules/react-native/ReactCommon/jsi/jsi/jsi.h')
+    if File.exist?(jsi_path)
+      content = File.read(jsi_path)
+      if content.include?('buffer.data(),') && !content.include?('const_cast')
+        File.write(jsi_path, content.gsub('buffer.data(),', 'const_cast<char*>(buffer.data()),'))
+        puts 'Surge: patched jsi.h buffer.data() const_cast for Xcode 26'
       end
     end
 
