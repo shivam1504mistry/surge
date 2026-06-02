@@ -1,9 +1,9 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Text, View, ScrollView, TouchableOpacity, StyleSheet } from "react-native";
+import { Text, View, ScrollView, TouchableOpacity, StyleSheet, Animated, Dimensions } from "react-native";
 import { useSafeAreaInsets, SafeAreaProvider } from "react-native-safe-area-context";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -11,6 +11,68 @@ import { PostHogProvider } from "posthog-react-native";
 import { Feather } from "@expo/vector-icons";
 import { posthog, track, identify } from "./lib/analytics";
 import NetInfo from "@react-native-community/netinfo";
+
+// ---------------------------------------------------------------------------
+// Animated splash screen (pure JS — no native changes)
+// ---------------------------------------------------------------------------
+function SurgeSplash() {
+  const boltY   = useRef(new Animated.Value(0)).current
+  const boltOp  = useRef(new Animated.Value(0)).current
+  const surgeOp = useRef(new Animated.Value(0)).current
+  const barOp   = useRef(new Animated.Value(0)).current
+  const tagOp   = useRef(new Animated.Value(0)).current
+  const motOp   = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    // Fade in bolt, then sequence the rest
+    Animated.sequence([
+      Animated.timing(boltOp,  { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(surgeOp, { toValue: 1, duration: 350, useNativeDriver: true }),
+      Animated.timing(barOp,   { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.timing(tagOp,   { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(motOp,   { toValue: 1, duration: 300, useNativeDriver: true }),
+    ]).start()
+
+    // Bolt float loop
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(boltY, { toValue: -8, duration: 1200, useNativeDriver: true }),
+        Animated.timing(boltY, { toValue:  0, duration: 1200, useNativeDriver: true }),
+      ])
+    ).start()
+  }, [])
+
+  return (
+    <View style={splash.safe}>
+      <Animated.Text style={[splash.bolt, { opacity: boltOp, transform: [{ translateY: boltY }] }]}>
+        ⚡
+      </Animated.Text>
+
+      <Animated.Text style={[splash.surge, { opacity: surgeOp }]}>
+        SURGE
+      </Animated.Text>
+
+      <Animated.View style={[splash.bar, { opacity: barOp }]} />
+
+      <Animated.Text style={[splash.tagline, { opacity: tagOp }]}>
+        The Fitness App That Listens!
+      </Animated.Text>
+
+      <Animated.Text style={[splash.motivate, { opacity: motOp }]}>
+        Your strongest self starts here.
+      </Animated.Text>
+    </View>
+  )
+}
+
+const splash = StyleSheet.create({
+  safe:     { flex: 1, backgroundColor: '#0D0D0D', alignItems: 'center', justifyContent: 'center' },
+  bolt:     { fontSize: 64, marginBottom: 16 },
+  surge:    { fontSize: 34, fontWeight: '900', color: '#fff', letterSpacing: 6, marginBottom: 12 },
+  bar:      { width: 48, height: 2, backgroundColor: '#FF4D00', borderRadius: 2, marginBottom: 12 },
+  tagline:  { fontSize: 12, color: '#FF4D00', fontWeight: '600', letterSpacing: 0.5, marginBottom: 20 },
+  motivate: { fontSize: 12, color: '#555', fontStyle: 'italic' },
+})
 
 // ---------------------------------------------------------------------------
 // Offline banner
@@ -293,20 +355,7 @@ function RootNavigator() {
     </Stack.Navigator>
   )
 
-  if (isLoading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: Colors.bg,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ fontSize: 48 }}>⚡</Text>
-      </View>
-    );
-  }
+  if (isLoading) return <SurgeSplash />
 
   if (!session) {
     return (
